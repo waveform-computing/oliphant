@@ -103,7 +103,7 @@ GRANT UTILS_HISTORY_USER TO UTILS_HISTORY_ADMIN WITH ADMIN OPTION;
 -- of input parameters.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION x_history_periodlen(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_periodlen(resolution VARCHAR(12))
     RETURNS INTERVAL
     LANGUAGE SQL
     IMMUTABLE
@@ -115,7 +115,7 @@ AS $$
     END);
 $$;
 
-CREATE FUNCTION x_history_periodstep(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_periodstep(resolution VARCHAR(12))
     RETURNS INTERVAL
     LANGUAGE SQL
     IMMUTABLE
@@ -126,30 +126,26 @@ AS $$
     END);
 $$;
 
-CREATE FUNCTION x_history_periodstep(source_schema NAME, source_table NAME)
+CREATE OR REPLACE FUNCTION x_history_periodstep(source_schema NAME, source_table NAME)
     RETURNS INTERVAL
     LANGUAGE SQL
     STABLE
 AS $$
     VALUES (CASE (
-        SELECT format_type(a.atttypid, NULL)
-        FROM
-            pg_catalog.pg_attribute a
-            JOIN pg_catalog.pg_class c
-                ON a.attrelid = c.oid
-            JOIN pg_catalog.pg_namespace n
-                ON c.relnamespace = n.oid
-        WHERE
-            n.nspname = source_schema
-            AND c.relname = source_table
-            AND a.attnum = 1
-        )
+            SELECT format_type(atttypid, NULL)
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = CAST(
+                    quote_ident(source_schema) || '.' || quote_ident(source_table)
+                    AS regclass)
+                AND attnum = 1
+            )
         WHEN 'timestamp without time zone' THEN INTERVAL '1 microsecond'
         WHEN 'date' THEN INTERVAL '1 day'
     END);
 $$;
 
-CREATE FUNCTION x_history_effname(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_effname(resolution VARCHAR(12))
     RETURNS NAME
     LANGUAGE SQL
     IMMUTABLE
@@ -157,25 +153,21 @@ AS $$
     VALUES (CAST('effective' AS name));
 $$;
 
-CREATE FUNCTION x_history_effname(source_schema NAME, source_table NAME)
+CREATE OR REPLACE FUNCTION x_history_effname(source_schema NAME, source_table NAME)
     RETURNS NAME
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT a.attname
-    FROM
-        pg_catalog.pg_attribute a
-        JOIN pg_catalog.pg_class c
-            ON a.attrelid = c.oid
-        JOIN pg_catalog.pg_namespace n
-            ON c.relnamespace = n.oid
+    SELECT attname
+    FROM pg_catalog.pg_attribute
     WHERE
-        n.nspname = source_schema
-        AND c.relname = source_table
-        AND a.attnum = 1;
+        attrelid = CAST(
+            quote_ident(source_schema) || '.' || quote_ident(source_table)
+            AS regclass)
+        AND attnum = 1;
 $$;
 
-CREATE FUNCTION x_history_expname(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_expname(resolution VARCHAR(12))
     RETURNS NAME
     LANGUAGE SQL
     IMMUTABLE
@@ -183,25 +175,21 @@ AS $$
     VALUES (CAST('expiry' AS NAME));
 $$;
 
-CREATE FUNCTION x_history_expname(source_schema NAME, source_table NAME)
+CREATE OR REPLACE FUNCTION x_history_expname(source_schema NAME, source_table NAME)
     RETURNS NAME
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT a.attname
-    FROM
-        pg_catalog.pg_attribute a
-        JOIN pg_catalog.pg_class c
-            ON a.attrelid = c.oid
-        JOIN pg_catalog.pg_namespace n
-            ON c.relnamespace = n.oid
+    SELECT attname
+    FROM pg_catalog.pg_attribute
     WHERE
-        n.nspname = source_schema
-        AND c.relname = source_table
-        AND a.attnum = 2;
+        attrelid = CAST(
+            quote_ident(source_schema) || '.' || quote_ident(source_table)
+            AS regclass)
+        AND attnum = 2;
 $$;
 
-CREATE FUNCTION x_history_effdefault(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_effdefault(resolution VARCHAR(12))
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -213,29 +201,25 @@ AS $$
         END);
 $$;
 
-CREATE FUNCTION x_history_effdefault(source_schema NAME, source_table NAME)
+CREATE OR REPLACE FUNCTION x_history_effdefault(source_schema NAME, source_table NAME)
     RETURNS TEXT
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT
-        d.adsrc
+    SELECT d.adsrc
     FROM
-        pg_catalog.pg_namespace n
-        JOIN pg_catalog.pg_class c
-            ON c.relnamespace = n.oid
-        JOIN pg_catalog.pg_attribute a
-            ON a.attrelid = c.oid
+        pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
-            ON d.adrelid = c.oid
+            ON d.adrelid = a.attrelid
             AND d.adnum = a.attnum
     WHERE
-        n.nspname = source_schema
-        AND c.relname = source_table
+        a.attrelid = CAST(
+            quote_ident(source_schema) || '.' || quote_ident(source_table)
+            AS regclass)
         AND a.attnum = 1;
 $$;
 
-CREATE FUNCTION x_history_expdefault(resolution VARCHAR(12))
+CREATE OR REPLACE FUNCTION x_history_expdefault(resolution VARCHAR(12))
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -247,29 +231,25 @@ AS $$
         END);
 $$;
 
-CREATE FUNCTION x_history_expdefault(source_schema name, source_table name)
+CREATE OR REPLACE FUNCTION x_history_expdefault(source_schema name, source_table name)
     RETURNS text
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT
-        d.adsrc
+    SELECT d.adsrc
     FROM
-        pg_catalog.pg_namespace n
-        JOIN pg_catalog.pg_class c
-            ON c.relnamespace = n.oid
-        JOIN pg_catalog.pg_attribute a
-            ON a.attrelid = c.oid
+        pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
-            ON d.adrelid = c.oid
+            ON d.adrelid = a.attrelid
             AND d.adnum = a.attnum
     WHERE
-        n.nspname = source_schema
-        AND c.relname = source_table
+        a.attrelid = CAST(
+            quote_ident(source_schema) || '.' || quote_ident(source_table)
+            AS regclass)
         AND a.attnum = 2;
 $$;
 
-CREATE FUNCTION x_history_periodstart(resolution VARCHAR(12), expression TEXT)
+CREATE OR REPLACE FUNCTION x_history_periodstart(resolution VARCHAR(12), expression TEXT)
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -279,7 +259,7 @@ AS $$
     );
 $$;
 
-CREATE FUNCTION x_history_periodend(resolution VARCHAR(12), expression TEXT)
+CREATE OR REPLACE FUNCTION x_history_periodend(resolution VARCHAR(12), expression TEXT)
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -291,7 +271,7 @@ AS $$
     );
 $$;
 
-CREATE FUNCTION x_history_effnext(resolution VARCHAR(12), shift INTERVAL)
+CREATE OR REPLACE FUNCTION x_history_effnext(resolution VARCHAR(12), shift INTERVAL)
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -306,7 +286,7 @@ AS $$
     );
 $$;
 
-CREATE FUNCTION x_history_expprior(resolution VARCHAR(12), shift INTERVAL)
+CREATE OR REPLACE FUNCTION x_history_expprior(resolution VARCHAR(12), shift INTERVAL)
     RETURNS TEXT
     LANGUAGE SQL
     IMMUTABLE
@@ -322,7 +302,7 @@ AS $$
     );
 $$;
 
-CREATE FUNCTION x_history_insert(
+CREATE OR REPLACE FUNCTION x_history_insert(
     source_schema NAME,
     source_table NAME,
     dest_schema NAME,
@@ -344,17 +324,13 @@ BEGIN
     insert_stmt := insert_stmt || quote_ident(x_history_effname(dest_schema, dest_table));
     values_stmt := values_stmt || x_history_effnext(resolution, shift);
     FOR r IN
-        SELECT a.attname
-        FROM
-            pg_catalog.pg_attribute a
-            JOIN pg_catalog.pg_class c
-                ON a.attrelid = c.oid
-            JOIN pg_catalog.pg_namespace n
-                ON c.relnamespace = n.oid
+        SELECT attname
+        FROM pg_catalog.pg_attribute
         WHERE
-            n.nspname = source_schema
-            AND c.relname = source_table
-        ORDER BY a.attnum
+            attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+        ORDER BY attnum
     LOOP
         insert_stmt := insert_stmt || ',' || quote_ident(r.attname);
         values_stmt := values_stmt || ',NEW.' || quote_ident(r.attname);
@@ -365,7 +341,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_expire(
+CREATE OR REPLACE FUNCTION x_history_expire(
     source_schema NAME,
     source_table NAME,
     dest_schema NAME,
@@ -388,35 +364,23 @@ BEGIN
         SELECT att.attname
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
-            JOIN unnest((
-                SELECT con.conkey
-                FROM
-                    pg_catalog.pg_constraint con
-                    JOIN pg_catalog.pg_class rel
-                        ON con.conrelid = rel.oid
-                    JOIN pg_catalog.pg_namespace nsp
-                        ON rel.relnamespace = nsp.oid
-                WHERE
-                    nsp.nspname = source_schema
-                    AND rel.relname = source_table
-                    AND con.contype = 'p'
-                )) AS key(attnum)
-                ON att.attnum = key.attnum
+            JOIN pg_catalog.pg_constraint con
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND att.attnum > 0
+            AND con.contype = 'p'
     LOOP
-        update_stmt := update_stmt || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+        update_stmt := update_stmt
+            || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
     END LOOP;
     RETURN update_stmt;
 END;
 $$;
 
-CREATE FUNCTION x_history_update(
+CREATE OR REPLACE FUNCTION x_history_update(
     source_schema NAME,
     source_table NAME,
     dest_schema NAME,
@@ -436,36 +400,24 @@ BEGIN
     update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
     where_stmt := ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname, COALESCE(key.attnum, 0) AS keynum
+        SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
-            LEFT JOIN unnest((
-                SELECT con.conkey
-                FROM
-                    pg_catalog.pg_constraint con
-                    JOIN pg_catalog.pg_class rel
-                        ON con.conrelid = rel.oid
-                    JOIN pg_catalog.pg_namespace nsp
-                        ON rel.relnamespace = nsp.oid
-                WHERE
-                    nsp.nspname = source_schema
-                    AND rel.relname = source_table
-                    AND con.contype = 'p'
-                )) AS key(attnum)
-                ON att.attnum = key.attnum
+            JOIN pg_catalog.pg_constraint con
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
             AND att.attnum > 0
+            AND con.contype = 'p'
     LOOP
-        IF r.keynum = 0 THEN
-            set_stmt := set_stmt || ', ' || quote_ident(r.attname) || ' = NEW.' || quote_ident(r.attname);
+        IF r.iskey THEN
+            where_stmt := where_stmt
+                || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
         ELSE
-            where_stmt := where_stmt || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+            set_stmt := set_stmt
+                || ', ' || quote_ident(r.attname) || ' = NEW.' || quote_ident(r.attname);
         END IF;
     END LOOP;
     set_stmt = 'SET' || substring(set_stmt from 2);
@@ -473,7 +425,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_delete(
+CREATE OR REPLACE FUNCTION x_history_delete(
     source_schema NAME,
     source_table NAME,
     dest_schema NAME,
@@ -495,35 +447,24 @@ BEGIN
         SELECT att.attname
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
-            JOIN unnest((
-                SELECT con.conkey
-                FROM
-                    pg_catalog.pg_constraint con
-                    JOIN pg_catalog.pg_class rel
-                        ON con.conrelid = rel.oid
-                    JOIN pg_catalog.pg_namespace nsp
-                        ON rel.relnamespace = nsp.oid
-                WHERE
-                    nsp.nspname = source_schema
-                    AND rel.relname = source_table
-                    AND con.contype = 'p'
-                )) AS key(attnum)
-                ON att.attnum = key.attnum
+            JOIN pg_catalog.pg_constraint con
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND att.attnum > 0
+            AND con.contype = 'p'
+            AND ARRAY [att.attnum] <@ con.conkey
     LOOP
-        where_stmt = where_stmt || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+        where_stmt := where_stmt
+            || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
     END LOOP;
     RETURN delete_stmt || where_stmt;
 END;
 $$;
 
-CREATE FUNCTION x_history_check(
+CREATE OR REPLACE FUNCTION x_history_check(
     source_schema NAME,
     source_table NAME,
     dest_schema NAME,
@@ -548,27 +489,15 @@ BEGIN
         SELECT att.attname
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
-            JOIN unnest((
-                SELECT con.conkey
-                FROM
-                    pg_catalog.pg_constraint con
-                    JOIN pg_catalog.pg_class rel
-                        ON con.conrelid = rel.oid
-                    JOIN pg_catalog.pg_namespace nsp
-                        ON rel.relnamespace = nsp.oid
-                WHERE
-                    nsp.nspname = source_schema
-                    AND rel.relname = source_table
-                    AND con.contype = 'p'
-                )) AS key(attnum)
-                ON att.attnum = key.attnum
+            JOIN pg_catalog.pg_constraint con
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND att.attnum > 0
+            AND con.contype = 'p'
+            AND ARRAY [att.attnum] <@ con.conkey
     LOOP
         where_stmt := where_stmt
             || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
@@ -577,7 +506,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_changes(
+CREATE OR REPLACE FUNCTION x_history_changes(
     source_schema NAME,
     source_table NAME
 )
@@ -603,15 +532,12 @@ BEGIN
         SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
             JOIN pg_catalog.pg_constraint con
-                ON con.conrelid = rel.oid
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
             AND con.contype = 'p'
             AND att.attnum > 0
     LOOP
@@ -654,7 +580,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_snapshots(
+CREATE OR REPLACE FUNCTION x_history_snapshots(
     source_schema NAME,
     source_table NAME,
     resolution VARCHAR(12)
@@ -678,18 +604,14 @@ BEGIN
         || ') '
         || 'SELECT ' || x_history_periodend(resolution, 'r.at') || ' AS snapshot';
     FOR r IN
-        SELECT a.attname
-        FROM
-            pg_catalog.pg_attribute a
-            JOIN pg_catalog.pg_class c
-                ON a.attrelid = c.oid
-            JOIN pg_catalog.pg_namespace n
-                ON c.relnamespace = n.oid
+        SELECT attname
+        FROM pg_catalog.pg_attribute
         WHERE
-            n.nspname = source_schema
-            AND c.relname = source_table
-            AND a.attnum > 2
-        ORDER BY a.attnum
+            attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND attnum > 2
+        ORDER BY attnum
     LOOP
         select_stmt := select_stmt
             || ', h.' || quote_ident(r.attname);
@@ -701,7 +623,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_update_fields(
+CREATE OR REPLACE FUNCTION x_history_update_fields(
     source_schema NAME,
     source_table NAME,
     key_fields BOOLEAN
@@ -718,15 +640,12 @@ BEGIN
         SELECT att.attname
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
             JOIN pg_catalog.pg_constraint con
-                ON con.conrelid = rel.oid
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
             AND con.contype = 'p'
             AND att.attnum > 0
             AND (
@@ -740,7 +659,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION x_history_update_when(
+CREATE OR REPLACE FUNCTION x_history_update_when(
     source_schema NAME,
     source_table NAME,
     key_fields BOOLEAN
@@ -757,15 +676,12 @@ BEGIN
         SELECT att.attname, att.attnotnull
         FROM
             pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_class rel
-                ON att.attrelid = rel.oid
-            JOIN pg_catalog.pg_namespace nsp
-                ON rel.relnamespace = nsp.oid
             JOIN pg_catalog.pg_constraint con
-                ON con.conrelid = rel.oid
+                ON con.conrelid = att.attrelid
         WHERE
-            nsp.nspname = source_schema
-            AND rel.relname = source_table
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
             AND con.contype = 'p'
             AND att.attnum > 0
             AND (
@@ -783,6 +699,177 @@ BEGIN
         END IF;
     END LOOP;
     RETURN substring(result from 5);
+END;
+$$;
+
+-- create_history_table(source_schema, source_table, dest_schema, dest_table, dest_tbspace, resolution)
+-- create_history_table(source_table, dest_table, dest_tbspace, resolution)
+-- create_history_table(source_table, dest_table, resolution)
+-- create_history_table(source_table, resolution)
+-------------------------------------------------------------------------------
+-- The create_history_table procedure creates, from a template table specified
+-- by source_schema and source_table, another table named by dest_schema and
+-- dest_table designed to hold a representation of the source table's content
+-- over time.  Specifically, the destination table has the same structure as
+-- source table, but with two additional columns named "effective" and "expiry"
+-- which occur before all other original columns. The primary key of the source
+-- table, in combination with "effective" will form the primary key of the
+-- destination table, and a unique index involving the primary key and the
+-- "expiry" column will also be created as this provides better performance of
+-- the triggers used to maintain the destination table.
+--
+-- The dest_tbspace parameter identifies the tablespace used to store the new
+-- table's data. If dest_tbspace is not specified, it defaults to the
+-- tablespace of the source table. If dest_table is not specified it defaults
+-- to the value of source_table with "_history" as a suffix. If dest_schema and
+-- source_schema are not specified they default to the current schema.
+--
+-- The resolution parameter determines the smallest unit of time that a history
+-- record can cover. See the create_history_trigger documentation for a list of
+-- the possible values.
+--
+-- All SELECT and CONTROL authorities present on the source table will be
+-- copied to the destination table. However, INSERT, UPDATE and DELETE
+-- authorities are excluded as these operations should only ever be performed
+-- by the history maintenance triggers themselves.
+--
+-- If the specified table already exists, this procedure will replace it,
+-- potentially losing all its content. If the existing history data is
+-- important to you, make sure you back it up before executing this procedure.
+-------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION create_history_table(
+    source_schema NAME,
+    source_table NAME,
+    dest_schema NAME,
+    dest_table NAME,
+    dest_tbspace NAME,
+    resolution VARCHAR(12)
+)
+    RETURNS void
+    LANGUAGE plpgsql
+    VOLATILE
+AS $$
+DECLARE
+    key_name NAME DEFAULT '';
+    key_cols TEXT DEFAULT '';
+    ddl TEXT DEFAULT '';
+    save_path VARCHAR(254);
+    save_schema VARCHAR(128);
+    r RECORD;
+    --pk_clustered BOOLEAN DEFAULT false;
+BEGIN
+    --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
+    -- Check the source table has a primary key
+    --IF (SELECT COALESCE(KEYCOLUMNS, 0)
+    --    FROM SYSCAT.TABLES
+    --    WHERE TABSCHEMA = SOURCE_SCHEMA
+    --    AND TABNAME = SOURCE_TABLE) = 0 THEN
+    --        CALL SIGNAL_STATE(HISTORY_NO_PK_STATE, 'Source table must have a primary key');
+    --END IF;
+    --SET PK_CLUSTERED = (
+    --    SELECT
+    --        CASE INDEXTYPE
+    --            WHEN 'CLUS' THEN 'Y'
+    --            ELSE 'N'
+    --        END
+    --    FROM SYSCAT.INDEXES
+    --    WHERE TABSCHEMA = SOURCE_SCHEMA
+    --    AND TABNAME = SOURCE_TABLE
+    --    AND UNIQUERULE = 'P'
+    --);
+    -- Drop any existing table with the same name as the destination table
+    FOR r IN
+        SELECT
+            'DROP TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS drop_cmd
+        FROM pg_catalog.pg_class
+        WHERE oid = CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)
+    LOOP
+        EXECUTE r.drop_cmd;
+    END LOOP;
+    -- Calculate comma-separated lists of key columns in the order they are
+    -- declared in the primary key (for generation of constraints later)
+    FOR r IN
+        WITH subscripts(i) AS (
+            SELECT generate_subscripts(conkey, 1)
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conrelid = CAST(
+                    quote_ident(source_schema) || '.' || quote_ident(source_table)
+                    AS regclass)
+                AND contype = 'p'
+        )
+        SELECT att.attname
+        FROM
+            pg_catalog.pg_attribute att
+            JOIN pg_catalog.pg_constraint con
+                ON con.conrelid = att.attrelid
+            JOIN subscripts sub
+                ON att.attnum = con.conkey[sub.i]
+        WHERE
+            att.attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND con.contype = 'p'
+            AND att.attnum > 0
+        ORDER BY sub.i
+    LOOP
+        key_cols := key_cols
+            || quote_ident(r.attname) || ',';
+    END LOOP;
+    -- Create the history table based on the source table
+    ddl :=
+        'CREATE TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' AS '
+        || '('
+        ||     'SELECT '
+        ||          x_history_effdefault(resolution) || ' AS ' || quote_ident(x_history_effname(resolution)) || ','
+        ||          x_history_expdefault(resolution) || ' AS ' || quote_ident(x_history_expname(resolution)) || ','
+        ||         't.* '
+        ||     'FROM '
+        ||          quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS t'
+        || ')'
+        || 'WITH NO DATA ';
+    IF dest_tbspace IS NOT NULL THEN
+        ddl := ddl || 'TABLESPACE ' || quote_ident(dest_tbspace);
+    END IF;
+    EXECUTE ddl;
+    -- Create two unique constraints, both based on the source table's primary
+    -- key, plus the EFFECTIVE and EXPIRY fields respectively. Use INCLUDE for
+    -- additional small fields in the EFFECTIVE index. The columns included are
+    -- the same as those included in the primary key of the source table.
+    key_name := quote_ident(dest_table || '_pkey');
+    ddl :=
+        'CREATE UNIQUE INDEX '
+        || key_name || ' '
+        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+        || '(' || key_cols || quote_ident(x_history_effname(resolution))
+        || ')';
+    EXECUTE ddl;
+    ddl :=
+        'CREATE UNIQUE INDEX '
+        || quote_ident(dest_table || '_ix1') || ' '
+        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+        || '(' || key_cols || quote_ident(x_history_expname(resolution))
+        || ')';
+    EXECUTE ddl;
+    -- Create additional indexes that are useful for performance purposes
+    ddl :=
+        'CREATE INDEX '
+        || quote_ident(dest_table || '_ix2') || ' '
+        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+        || '(' || quote_ident(x_history_effname(resolution))
+        || ',' || quote_ident(x_history_expname(resolution))
+        || ')';
+    EXECUTE ddl;
+    -- Create a primary key with the same fields as the EFFECTIVE index defined
+    -- above.
+    ddl :=
+        'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
+        || 'ADD PRIMARY KEY USING INDEX ' || key_name || ', '
+        || 'ADD CHECK (' || quote_ident(x_history_effname(resolution)) || ' <= ' || quote_ident(x_history_expname(resolution)) || '), '
+        || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
+        || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
+    EXECUTE ddl;
 END;
 $$;
 
