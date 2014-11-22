@@ -754,10 +754,7 @@ DECLARE
     key_name NAME DEFAULT '';
     key_cols TEXT DEFAULT '';
     ddl TEXT DEFAULT '';
-    save_path VARCHAR(254);
-    save_schema VARCHAR(128);
     r RECORD;
-    --pk_clustered BOOLEAN DEFAULT false;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
     -- Check the source table has a primary key
@@ -767,17 +764,6 @@ BEGIN
     --    AND TABNAME = SOURCE_TABLE) = 0 THEN
     --        CALL SIGNAL_STATE(HISTORY_NO_PK_STATE, 'Source table must have a primary key');
     --END IF;
-    --SET PK_CLUSTERED = (
-    --    SELECT
-    --        CASE INDEXTYPE
-    --            WHEN 'CLUS' THEN 'Y'
-    --            ELSE 'N'
-    --        END
-    --    FROM SYSCAT.INDEXES
-    --    WHERE TABSCHEMA = SOURCE_SCHEMA
-    --    AND TABNAME = SOURCE_TABLE
-    --    AND UNIQUERULE = 'P'
-    --);
     -- Drop any existing table with the same name as the destination table
     FOR r IN
         SELECT
@@ -833,10 +819,45 @@ BEGIN
         ddl := ddl || 'TABLESPACE ' || quote_ident(dest_tbspace);
     END IF;
     EXECUTE ddl;
+    -- Copy NOT NULL constraints from the source table to the history table
+    ddl := '';
+    FOR r IN
+        SELECT attname
+        FROM pg_catalog.pg_attribute
+        WHERE
+            attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND attnotnull
+            AND attnum > 0
+    LOOP
+        ddl :=
+            'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+            || ' ALTER COLUMN ' || quote_ident(r.attname) || ' SET NOT NULL';
+        EXECUTE ddl;
+    END LOOP;
+    -- Copy CHECK and EXCLUDE constraints from the source table to the history
+    -- table. Note that we do not copy FOREIGN KEY constraints as there's no
+    -- good method of matching a parent record in a historized table.
+    ddl := '';
+    FOR r IN
+        SELECT pg_get_constraintdef(oid) AS ddl
+        FROM pg_catalog.pg_constraint
+        WHERE
+            conrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND contype IN ('c', 'x')
+    LOOP
+        ddl :=
+            'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+            || ' ADD ' || r.ddl;
+    END LOOP;
     -- Create two unique constraints, both based on the source table's primary
     -- key, plus the EFFECTIVE and EXPIRY fields respectively. Use INCLUDE for
     -- additional small fields in the EFFECTIVE index. The columns included are
     -- the same as those included in the primary key of the source table.
+    -- TODO tablespaces...
     key_name := quote_ident(dest_table || '_pkey');
     ddl :=
         'CREATE UNIQUE INDEX '
@@ -870,6 +891,101 @@ BEGIN
         || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
         || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
     EXECUTE ddl;
+    -- TODO authorizations; needs auth.sql first
+    -- Set up comments for the effective and expiry fields then copy the
+    -- comments for all fields from the source table
+    ddl :=
+        'COMMENT ON TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+        || ' IS ' || quote_literal('History table which tracks the content of @' || source_schema || '.' || source_table);
+    EXECUTE ddl;
+    ddl :=
+        'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_effname(resolution))
+        || ' IS ' || quote_literal('The date/timestamp from which this row was present in the source table');
+    EXECUTE ddl;
+    ddl :=
+        'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_expname(resolution))
+        || ' IS ' || quote_literal('The date/timestamp until which this row was present in the source table (rows with 9999-12-31 currently exist in the source table)');
+    EXECUTE ddl;
+    FOR r IN
+        SELECT attname, col_description(
+            CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum) AS attdesc
+        FROM pg_catalog.pg_attribute
+        WHERE
+            attrelid = CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass)
+            AND attnum > 0
+    LOOP
+        IF r.attdesc IS NOT NULL THEN
+            ddl :=
+                'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(r.attname)
+                || ' IS ' || quote_literal(r.attdesc);
+            EXECUTE ddl;
+        END IF;
+    END LOOP;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION create_history_table(
+    source_table NAME,
+    dest_table NAME,
+    dest_tbspace NAME,
+    resolution VARCHAR(12)
+)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (
+        create_history_table(
+            current_schema, source_table, current_schema, dest_table, dest_tbspace, resolution));
+$$;
+
+CREATE OR REPLACE FUNCTION create_history_table(
+    source_table NAME,
+    dest_table NAME,
+    resolution VARCHAR(12)
+)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (
+        create_history_table(
+            source_table, dest_table, (
+                SELECT spc.spcname
+                FROM
+                    pg_catalog.pg_class cls
+                    LEFT JOIN pg_catalog.pg_tablespace spc
+                        ON cls.reltablespace = spc.oid
+                WHERE cls.oid = CAST(
+                    quote_ident(current_schema) || '.' || quote_ident(source_table)
+                    AS regclass)
+            ), resolution));
+$$;
+
+CREATE OR REPLACE FUNCTION create_history_table(
+    source_table NAME,
+    resolution VARCHAR(12)
+)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (
+        create_history_table(
+            source_table, source_table || '_history', resolution));
+$$;
+
+GRANT EXECUTE ON FUNCTION create_history_table(NAME, NAME, NAME, NAME, NAME, VARCHAR) TO utils_history_user;
+GRANT EXECUTE ON FUNCTION create_history_table(NAME, NAME, NAME, VARCHAR)             TO utils_history_user;
+GRANT EXECUTE ON FUNCTION create_history_table(NAME, NAME, VARCHAR)                   TO utils_history_user;
+GRANT EXECUTE ON FUNCTION create_history_table(NAME, VARCHAR)                         TO utils_history_user;
+
+GRANT ALL ON FUNCTION create_history_table(NAME, NAME, NAME, NAME, NAME, VARCHAR) TO utils_history_admin WITH GRANT OPTION;
+GRANT ALL ON FUNCTION create_history_table(NAME, NAME, NAME, VARCHAR)             TO utils_history_admin WITH GRANT OPTION;
+GRANT ALL ON FUNCTION create_history_table(NAME, NAME, VARCHAR)                   TO utils_history_admin WITH GRANT OPTION;
+GRANT ALL ON FUNCTION create_history_table(NAME, VARCHAR)                         TO utils_history_admin WITH GRANT OPTION;
 
