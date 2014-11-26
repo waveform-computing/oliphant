@@ -53,114 +53,98 @@ GRANT UTILS_HISTORY_USER TO UTILS_HISTORY_ADMIN WITH ADMIN OPTION;
 -- and functions in this module.
 -------------------------------------------------------------------------------
 
---CREATE VARIABLE HISTORY_KEY_FIELDS_STATE CHAR(5) CONSTANT '90004';
---CREATE VARIABLE HISTORY_NO_PK_STATE CHAR(5) CONSTANT '90005';
---CREATE VARIABLE HISTORY_UPDATE_PK_STATE CHAR(5) CONSTANT '90006';
---
---GRANT READ ON VARIABLE HISTORY_KEY_FIELDS_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_NO_PK_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_UPDATE_PK_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_KEY_FIELDS_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---GRANT READ ON VARIABLE HISTORY_NO_PK_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---GRANT READ ON VARIABLE HISTORY_UPDATE_PK_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---
---COMMENT ON VARIABLE HISTORY_KEY_FIELDS_STATE
---    IS 'The SQLSTATE raised when a history sub-routine is called with something other than ''Y'' or ''N'' as the KEY_FIELDS parameter';
---
---COMMENT ON VARIABLE HISTORY_NO_PK_STATE
---    IS 'The SQLSTATE raised when an attempt is made to create a history table for a table without a primary key';
---
---COMMENT ON VARIABLE HISTORY_UPDATE_PK_STATE
---    IS 'The SQLSTATE raised when an attempt is made to update a primary key''s value in a table with an associated history table';
-
--- X_HISTORY_PERIODLEN(RESOLUTION)
--- X_HISTORY_PERIODSTEP(RESOLUTION)
--- X_HISTORY_PERIODSTEP(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EFFNAME(RESOLUTION)
--- X_HISTORY_EFFNAME(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EXPNAME(RESOLUTION)
--- X_HISTORY_EXPNAME(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EFFDEFAULT(RESOLUTION)
--- X_HISTORY_EFFDEFAULT(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EXPDEFAULT(RESOLUTION)
--- X_HISTORY_EXPDEFAULT(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_PERIODSTART(RESOLUTION, EXPRESSION)
--- X_HISTORY_PERIODEND(RESOLUTION, EXPRESSION)
--- X_HISTORY_EFFNEXT(RESOLUTION, OFFSET)
--- X_HISTORY_EXPPRIOR(RESOLUTION, OFFSET)
--- X_HISTORY_INSERT(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION, OFFSET)
--- X_HISTORY_EXPIRE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION, OFFSET)
--- X_HISTORY_DELETE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_UPDATE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_CHECK(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_CHANGES(SOURCE_SCHEMA, SOURCE_TABLE, RESOLUTION)
--- X_HISTORY_SNAPSHOTS(SOURCE_SCHEMA, SOURCE_TABLE, RESOLUTION)
--- X_HISTORY_UPDATE_FIELDS(SOURCE_SCHEMA, SOURCE_TABLE, KEY_FIELDS)
--- X_HISTORY_UPDATE_WHEN(SOURCE_SCHEMA, SOURCE_TABLE, KEY_FIELDS)
+-- x_history_periodlen(resolution)
+-- x_history_periodstep(resolution)
+-- x_history_periodstep(source_schema, source_table)
+-- x_history_effname(resolution)
+-- x_history_effname(source_schema, source_table)
+-- x_history_expname(resolution)
+-- x_history_expname(source_schema, source_table)
+-- x_history_effdefault(resolution)
+-- x_history_effdefault(source_schema, source_table)
+-- x_history_expdefault(resolution)
+-- x_history_expdefault(source_schema, source_table)
+-- x_history_periodstart(resolution, expression)
+-- x_history_periodend(resolution, expression)
+-- x_history_effnext(resolution, offset)
+-- x_history_expprior(resolution, offset)
+-- x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, offset)
+-- x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, offset)
+-- x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_update(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_check(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_changes(source_schema, source_table, resolution)
+-- x_history_snapshots(source_schema, source_table, resolution)
+-- x_history_update_fields(source_schema, source_table, key_fields)
+-- x_history_update_when(source_schema, source_table, key_fields)
 -------------------------------------------------------------------------------
 -- These functions are effectively private utility subroutines for the
 -- procedures defined below. They simply generate snippets of SQL given a set
 -- of input parameters.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION x_history_periodlen(resolution VARCHAR(12))
-    RETURNS INTERVAL
+CREATE OR REPLACE FUNCTION x_history_periodlen(resolution varchar(12))
+    RETURNS interval
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (CASE resolution
         WHEN 'quarter' THEN interval '3 months'
         WHEN 'millennium' THEN interval '1000 years'
-        ELSE CAST('1 ' || resolution AS INTERVAL)
+        ELSE CAST('1 ' || resolution AS interval)
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstep(resolution VARCHAR(12))
-    RETURNS INTERVAL
+CREATE OR REPLACE FUNCTION x_history_periodstep(resolution varchar(12))
+    RETURNS interval
     LANGUAGE SQL
     IMMUTABLE
 AS $$
-    VALUES (CASE WHEN x_history_periodlen(resolution) >= INTERVAL '1 day'
-        THEN INTERVAL '1 day'
-        ELSE INTERVAL '1 microsecond'
+    VALUES (CASE WHEN x_history_periodlen(resolution) >= interval '1 day'
+        THEN interval '1 day'
+        ELSE interval '1 microsecond'
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstep(source_schema NAME, source_table NAME)
-    RETURNS INTERVAL
+CREATE OR REPLACE FUNCTION x_history_periodstep(source_schema name, source_table name)
+    RETURNS interval
     LANGUAGE SQL
     STABLE
 AS $$
     VALUES (CASE (
-            SELECT format_type(atttypid, NULL)
-            FROM pg_catalog.pg_attribute
+            SELECT
+                format_type(atttypid, NULL)
+            FROM
+                pg_catalog.pg_attribute
             WHERE
                 attrelid = CAST(
                     quote_ident(source_schema) || '.' || quote_ident(source_table)
                     AS regclass)
                 AND attnum = 1
             )
-        WHEN 'timestamp without time zone' THEN INTERVAL '1 microsecond'
-        WHEN 'timestamp with time zone' THEN INTERVAL '1 microsecond'
-        WHEN 'date' THEN INTERVAL '1 day'
+        WHEN 'timestamp without time zone' THEN interval '1 microsecond'
+        WHEN 'timestamp with time zone' THEN interval '1 microsecond'
+        WHEN 'date' THEN interval '1 day'
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effname(resolution VARCHAR(12))
-    RETURNS NAME
+CREATE OR REPLACE FUNCTION x_history_effname(resolution varchar(12))
+    RETURNS name
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (CAST('effective' AS name));
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effname(source_schema NAME, source_table NAME)
-    RETURNS NAME
+CREATE OR REPLACE FUNCTION x_history_effname(source_schema name, source_table name)
+    RETURNS name
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT attname
-    FROM pg_catalog.pg_attribute
+    SELECT
+        attname
+    FROM
+        pg_catalog.pg_attribute
     WHERE
         attrelid = CAST(
             quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -168,21 +152,23 @@ AS $$
         AND attnum = 1;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expname(resolution VARCHAR(12))
-    RETURNS NAME
+CREATE OR REPLACE FUNCTION x_history_expname(resolution varchar(12))
+    RETURNS name
     LANGUAGE SQL
     IMMUTABLE
 AS $$
-    VALUES (CAST('expiry' AS NAME));
+    VALUES (CAST('expiry' AS name));
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expname(source_schema NAME, source_table NAME)
-    RETURNS NAME
+CREATE OR REPLACE FUNCTION x_history_expname(source_schema name, source_table name)
+    RETURNS name
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT attname
-    FROM pg_catalog.pg_attribute
+    SELECT
+        attname
+    FROM
+        pg_catalog.pg_attribute
     WHERE
         attrelid = CAST(
             quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -190,24 +176,25 @@ AS $$
         AND attnum = 2;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effdefault(resolution VARCHAR(12))
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_effdefault(resolution varchar(12))
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (
-        CASE WHEN x_history_periodlen(resolution) >= INTERVAL '1 day'
+        CASE WHEN x_history_periodlen(resolution) >= interval '1 day'
             THEN 'current_date'
             ELSE 'current_timestamp'
         END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effdefault(source_schema NAME, source_table NAME)
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_effdefault(source_schema name, source_table name)
+    RETURNS text
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT d.adsrc
+    SELECT
+        d.adsrc
     FROM
         pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
@@ -220,15 +207,15 @@ AS $$
         AND a.attnum = 1;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expdefault(resolution VARCHAR(12))
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_expdefault(resolution varchar(12))
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (
-        CASE WHEN x_history_periodlen(resolution) >= INTERVAL '1 day'
-            THEN 'DATE ''9999-12-31'''
-            ELSE 'TIMESTAMP ''9999-12-31 23:59:59.999999'''
+        CASE WHEN x_history_periodlen(resolution) >= interval '1 day'
+            THEN 'date ''9999-12-31'''
+            ELSE 'timestamp ''9999-12-31 23:59:59.999999'''
         END);
 $$;
 
@@ -237,7 +224,8 @@ CREATE OR REPLACE FUNCTION x_history_expdefault(source_schema name, source_table
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT d.adsrc
+    SELECT
+        d.adsrc
     FROM
         pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
@@ -250,8 +238,8 @@ AS $$
         AND a.attnum = 2;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstart(resolution VARCHAR(12), expression TEXT)
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_periodstart(resolution varchar(12), expression text)
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
@@ -260,20 +248,20 @@ AS $$
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodend(resolution VARCHAR(12), expression TEXT)
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_periodend(resolution varchar(12), expression text)
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (
         'date_trunc(' || quote_literal(resolution) || ', ' || expression || ') + '
-        || 'INTERVAL ' || quote_literal(x_history_periodlen(resolution)) || ' - '
-        || 'INTERVAL ' || quote_literal(x_history_periodstep(resolution))
+        || 'interval ' || quote_literal(x_history_periodlen(resolution)) || ' - '
+        || 'interval ' || quote_literal(x_history_periodstep(resolution))
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effnext(resolution VARCHAR(12), shift INTERVAL)
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_effnext(resolution varchar(12), shift interval)
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
@@ -281,52 +269,54 @@ AS $$
         x_history_periodstart(
             resolution, x_history_effdefault(resolution)
             || CASE WHEN shift IS NOT NULL
-                THEN ' + INTERVAL ' || quote_literal(shift)
+                THEN ' + interval ' || quote_literal(shift)
                 ELSE ''
             END)
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expprior(resolution VARCHAR(12), shift INTERVAL)
-    RETURNS TEXT
+CREATE OR REPLACE FUNCTION x_history_expprior(resolution varchar(12), shift interval)
+    RETURNS text
     LANGUAGE SQL
     IMMUTABLE
 AS $$
     VALUES (
         x_history_periodend(
             resolution, x_history_effdefault(resolution)
-            || ' - INTERVAL ' || quote_literal(x_history_periodlen(resolution))
+            || ' - interval ' || quote_literal(x_history_periodlen(resolution))
             || CASE WHEN shift IS NOT NULL
-                THEN ' + INTERVAL ' || quote_literal(shift)
+                THEN ' + interval ' || quote_literal(shift)
                 ELSE ''
             END)
     );
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_insert(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12),
-    shift INTERVAL
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12),
+    shift interval
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    insert_stmt TEXT DEFAULT '';
-    values_stmt TEXT DEFAULT '';
-    r RECORD;
+    insert_stmt text DEFAULT '';
+    values_stmt text DEFAULT '';
+    r record;
 BEGIN
     insert_stmt := 'INSERT INTO ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '(';
     values_stmt = ' VALUES (';
     insert_stmt := insert_stmt || quote_ident(x_history_effname(dest_schema, dest_table));
     values_stmt := values_stmt || x_history_effnext(resolution, shift);
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -344,26 +334,27 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_expire(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12),
-    shift INTERVAL
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12),
+    shift interval
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    update_stmt TEXT DEFAULT '';
-    r RECORD;
+    update_stmt text DEFAULT '';
+    r record;
 BEGIN
     update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || ' SET '   || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expprior(resolution, shift)
         || ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -383,26 +374,28 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_update(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12)
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    update_stmt TEXT DEFAULT '';
-    set_stmt TEXT DEFAULT '';
-    where_stmt TEXT DEFAULT '';
-    r RECORD;
+    update_stmt text DEFAULT '';
+    set_stmt text DEFAULT '';
+    where_stmt text DEFAULT '';
+    r record;
 BEGIN
     update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
     where_stmt := ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
+        SELECT
+            att.attname,
+            ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -428,25 +421,26 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_delete(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12)
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    delete_stmt TEXT DEFAULT '';
-    where_stmt TEXT DEFAULT '';
-    r RECORD;
+    delete_stmt text DEFAULT '';
+    where_stmt text DEFAULT '';
+    r record;
 BEGIN
     delete_stmt = 'DELETE FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table);
     where_stmt = ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -467,28 +461,32 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_check(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12)
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    select_stmt TEXT DEFAULT '';
-    where_stmt TEXT DEFAULT '';
-    r RECORD;
+    select_stmt text DEFAULT '';
+    where_stmt text DEFAULT '';
+    r record;
 BEGIN
     select_stmt :=
-        'SELECT ' || x_history_periodend(resolution, x_history_effname(dest_schema, dest_table))
-        || ' FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table);
+        'SELECT '
+        || x_history_periodend(resolution, x_history_effname(dest_schema, dest_table)) || ' '
+        || 'FROM '
+        || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
     where_stmt :=
-        ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
+        'WHERE '
+        || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -509,29 +507,31 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_changes(
-    source_schema NAME,
-    source_table NAME
+    source_schema name,
+    source_table name
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    select_stmt TEXT DEFAULT '';
-    from_stmt TEXT DEFAULT '';
-    insert_test TEXT DEFAULT '';
-    update_test TEXT DEFAULT '';
-    delete_test TEXT DEFAULT '';
-    r RECORD;
+    select_stmt text DEFAULT '';
+    from_stmt text DEFAULT '';
+    insert_test text DEFAULT '';
+    update_test text DEFAULT '';
+    delete_test text DEFAULT '';
+    r record;
 BEGIN
     from_stmt :=
         ' FROM ' || quote_ident('old_' || source_table) || ' AS old'
         || ' FULL JOIN ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS new'
-        || ' ON new.' || x_history_effname(source_schema, source_table) || ' - INTERVAL ' || quote_literal(x_history_periodstep(source_schema, source_table))
+        || ' ON new.' || x_history_effname(source_schema, source_table) || ' - interval ' || quote_literal(x_history_periodstep(source_schema, source_table))
         || ' BETWEEN old.' || x_history_effname(source_schema, source_table)
         || ' AND old.' || x_history_expname(source_schema, source_table);
     FOR r IN
-        SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
+        SELECT
+            att.attname,
+            ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -564,13 +564,13 @@ BEGIN
         'SELECT'
         || ' coalesce(new.'
             || quote_ident(x_history_effname(source_schema, source_table)) || ', old.'
-            || quote_ident(x_history_expname(source_schema, source_table)) || ' + INTERVAL ' || quote_literal(x_history_periodstep(source_schema, source_table)) || ') AS changed'
+            || quote_ident(x_history_expname(source_schema, source_table)) || ' + interval ' || quote_literal(x_history_periodstep(source_schema, source_table)) || ') AS changed'
         || ', CAST(CASE '
             || 'WHEN' || substring(insert_test from 4) || 'THEN ''INSERT'' '
             || 'WHEN' || substring(update_test from 4) || 'THEN ''UPDATE'' '
             || 'WHEN' || substring(delete_test from 4) || 'THEN ''DELETE'' '
-            || 'ELSE ''ERROR'' END AS CHAR(6)) AS change'
-        || SELECT_STMT;
+            || 'ELSE ''ERROR'' END AS char(6)) AS change'
+        || select_stmt;
     RETURN
         'WITH ' || quote_ident('old_' || source_table) || ' AS ('
         || '    SELECT *'
@@ -583,17 +583,17 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_snapshots(
-    source_schema NAME,
-    source_table NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    resolution varchar(12)
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    select_stmt TEXT DEFAULT '';
-    r RECORD;
+    select_stmt text DEFAULT '';
+    r record;
 BEGIN
     select_stmt :=
         'WITH RECURSIVE range(at) AS ('
@@ -606,8 +606,10 @@ BEGIN
         || ') '
         || 'SELECT ' || x_history_periodend(resolution, 'r.at') || ' AS snapshot';
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -626,20 +628,21 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_update_fields(
-    source_schema NAME,
-    source_table NAME,
+    source_schema name,
+    source_table name,
     key_fields BOOLEAN
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    result TEXT DEFAULT '';
-    r RECORD;
+    result text DEFAULT '';
+    r record;
 BEGIN
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -663,17 +666,17 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION x_history_update_when(
-    source_schema NAME,
-    source_table NAME,
+    source_schema name,
+    source_table name,
     key_fields BOOLEAN
 )
-    RETURNS TEXT
+    RETURNS text
     LANGUAGE plpgsql
     STABLE
 AS $$
 DECLARE
-    result TEXT DEFAULT '';
-    r RECORD;
+    result text DEFAULT '';
+    r record;
 BEGIN
     FOR r IN
         SELECT att.attname, att.attnotnull
@@ -742,22 +745,21 @@ $$;
 -------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION create_history_table(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    dest_tbspace NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    dest_tbspace name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE plpgsql
     VOLATILE
 AS $$
 DECLARE
-    key_name NAME DEFAULT '';
-    key_cols TEXT DEFAULT '';
-    ddl TEXT DEFAULT '';
-    r RECORD;
+    key_name name DEFAULT '';
+    key_cols text DEFAULT '';
+    r record;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
     -- Check the source table has a primary key
@@ -785,15 +787,18 @@ BEGIN
     -- declared in the primary key (for generation of constraints later)
     FOR r IN
         WITH subscripts(i) AS (
-            SELECT generate_subscripts(conkey, 1)
-            FROM pg_catalog.pg_constraint
+            SELECT
+                generate_subscripts(conkey, 1)
+            FROM
+                pg_catalog.pg_constraint
             WHERE
                 conrelid = CAST(
                     quote_ident(source_schema) || '.' || quote_ident(source_table)
                     AS regclass)
                 AND contype = 'p'
         )
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -812,7 +817,7 @@ BEGIN
             || quote_ident(r.attname) || ',';
     END LOOP;
     -- Create the history table based on the source table
-    ddl :=
+    EXECUTE
         'CREATE TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' AS '
         || '('
         ||     'SELECT '
@@ -822,16 +827,14 @@ BEGIN
         ||     'FROM '
         ||          quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS t'
         || ')'
-        || 'WITH NO DATA ';
-    IF dest_tbspace IS NOT NULL THEN
-        ddl := ddl || 'TABLESPACE ' || quote_ident(dest_tbspace);
-    END IF;
-    EXECUTE ddl;
+        || 'WITH NO DATA '
+        || CASE WHEN dest_tbspace IS NOT NULL THEN 'TABLESPACE ' || quote_ident(dest_tbspace) ELSE '' END;
     -- Copy NOT NULL constraints from the source table to the history table
-    ddl := '';
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -839,27 +842,27 @@ BEGIN
             AND attnotnull
             AND attnum > 0
     LOOP
-        ddl :=
+        EXECUTE
             'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
             || ' ALTER COLUMN ' || quote_ident(r.attname) || ' SET NOT NULL';
-        EXECUTE ddl;
     END LOOP;
     -- Copy CHECK and EXCLUDE constraints from the source table to the history
     -- table. Note that we do not copy FOREIGN KEY constraints as there's no
     -- good method of matching a parent record in a historized table.
-    ddl := '';
     FOR r IN
-        SELECT pg_get_constraintdef(oid) AS ddl
-        FROM pg_catalog.pg_constraint
+        SELECT
+            pg_get_constraintdef(oid) AS con_def
+        FROM
+            pg_catalog.pg_constraint
         WHERE
             conrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND contype IN ('c', 'x')
     LOOP
-        ddl :=
+        EXECUTE
             'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-            || ' ADD ' || r.ddl;
+            || ' ADD ' || r.con_def;
     END LOOP;
     -- Create two unique constraints, both based on the source table's primary
     -- key, plus the EFFECTIVE and EXPIRY fields respectively. Use INCLUDE for
@@ -867,79 +870,74 @@ BEGIN
     -- the same as those included in the primary key of the source table.
     -- TODO tablespaces...
     key_name := quote_ident(dest_table || '_pkey');
-    ddl :=
+    EXECUTE
         'CREATE UNIQUE INDEX '
         || key_name || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || key_cols || quote_ident(x_history_effname(resolution))
         || ')';
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'CREATE UNIQUE INDEX '
         || quote_ident(dest_table || '_ix1') || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || key_cols || quote_ident(x_history_expname(resolution))
         || ')';
-    EXECUTE ddl;
     -- Create additional indexes that are useful for performance purposes
-    ddl :=
+    EXECUTE
         'CREATE INDEX '
         || quote_ident(dest_table || '_ix2') || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || quote_ident(x_history_effname(resolution))
         || ',' || quote_ident(x_history_expname(resolution))
         || ')';
-    EXECUTE ddl;
     -- Create a primary key with the same fields as the EFFECTIVE index defined
     -- above.
-    ddl :=
+    EXECUTE
         'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
         || 'ADD PRIMARY KEY USING INDEX ' || key_name || ', '
         || 'ADD CHECK (' || quote_ident(x_history_effname(resolution)) || ' <= ' || quote_ident(x_history_expname(resolution)) || '), '
         || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
         || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
-    EXECUTE ddl;
     -- TODO authorizations; needs auth.sql first
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    ddl :=
+    EXECUTE
         'COMMENT ON TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || ' IS ' || quote_literal('History table which tracks the content of @' || source_schema || '.' || source_table);
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_effname(resolution))
         || ' IS ' || quote_literal('The date/timestamp from which this row was present in the source table');
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_expname(resolution))
         || ' IS ' || quote_literal('The date/timestamp until which this row was present in the source table (rows with 9999-12-31 currently exist in the source table)');
-    EXECUTE ddl;
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND attnum > 0
     LOOP
-        ddl :=
+        EXECUTE
             'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(r.attname)
             || ' IS ' || quote_literal(r.attdesc);
-        EXECUTE ddl;
     END LOOP;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_table(
-    source_table NAME,
-    dest_table NAME,
-    dest_tbspace NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    dest_table name,
+    dest_tbspace name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -949,18 +947,19 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_table(
-    source_table NAME,
-    dest_table NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    dest_table name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
     VALUES (
         create_history_table(
             source_table, dest_table, (
-                SELECT spc.spcname
+                SELECT
+                    spc.spcname
                 FROM
                     pg_catalog.pg_class cls
                     LEFT JOIN pg_catalog.pg_tablespace spc
@@ -972,10 +971,10 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_table(
-    source_table NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -985,26 +984,26 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_table(NAME, NAME, NAME, NAME, NAME, VARCHAR),
-    create_history_table(NAME, NAME, NAME, VARCHAR),
-    create_history_table(NAME, NAME, VARCHAR),
-    create_history_table(NAME, VARCHAR)
+    create_history_table(name, name, name, name, name, varchar),
+    create_history_table(name, name, name, varchar),
+    create_history_table(name, name, varchar),
+    create_history_table(name, varchar)
     TO utils_history_user;
 
 GRANT ALL ON FUNCTION
-    create_history_table(NAME, NAME, NAME, NAME, NAME, VARCHAR),
-    create_history_table(NAME, NAME, NAME, VARCHAR),
-    create_history_table(NAME, NAME, VARCHAR),
-    create_history_table(NAME, VARCHAR)
+    create_history_table(name, name, name, name, name, varchar),
+    create_history_table(name, name, name, varchar),
+    create_history_table(name, name, varchar),
+    create_history_table(name, varchar)
     TO utils_history_admin WITH GRANT OPTION;
 
-COMMENT ON FUNCTION CREATE_HISTORY_TABLE(NAME, NAME, NAME, NAME, NAME, VARCHAR)
+COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, name, name, name, name, varchar)
     IS 'Creates a temporal history table based on the structure of the specified table';
-COMMENT ON FUNCTION CREATE_HISTORY_TABLE(NAME, NAME, NAME, VARCHAR)
+COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, name, name, varchar)
     IS 'Creates a temporal history table based on the structure of the specified table';
-COMMENT ON FUNCTION CREATE_HISTORY_TABLE(NAME, NAME, VARCHAR)
+COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, name, varchar)
     IS 'Creates a temporal history table based on the structure of the specified table';
-COMMENT ON FUNCTION CREATE_HISTORY_TABLE(NAME, VARCHAR)
+COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, varchar)
     IS 'Creates a temporal history table based on the structure of the specified table';
 
 -- create_history_changes(source_schema, source_table, dest_schema, dest_view)
@@ -1041,17 +1040,17 @@ COMMENT ON FUNCTION CREATE_HISTORY_TABLE(NAME, VARCHAR)
 -------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION create_history_changes(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_view NAME
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_view name
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE plpgsql
     VOLATILE
 AS $$
 DECLARE
-    r RECORD;
+    r record;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
     EXECUTE
@@ -1087,10 +1086,13 @@ BEGIN
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
         || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of changes');
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -1110,10 +1112,10 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_changes(
-    source_table NAME,
-    dest_view NAME
+    source_table name,
+    dest_view name
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1124,9 +1126,9 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_changes(
-    source_table NAME
+    source_table name
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1137,22 +1139,22 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_changes(NAME, NAME, NAME, NAME),
-    create_history_changes(NAME, NAME),
-    create_history_changes(NAME)
+    create_history_changes(name, name, name, name),
+    create_history_changes(name, name),
+    create_history_changes(name)
     TO utils_history_user;
 
 GRANT ALL ON FUNCTION
-    create_history_changes(NAME, NAME, NAME, NAME),
-    create_history_changes(NAME, NAME),
-    create_history_changes(NAME)
+    create_history_changes(name, name, name, name),
+    create_history_changes(name, name),
+    create_history_changes(name)
     TO utils_history_admin WITH GRANT OPTION;
 
-COMMENT ON FUNCTION create_history_changes(NAME, NAME, NAME, NAME)
+COMMENT ON FUNCTION create_history_changes(name, name, name, name)
     IS 'Creates an "OLD vs NEW" changes view on top of the specified history table';
-COMMENT ON FUNCTION create_history_changes(NAME, NAME)
+COMMENT ON FUNCTION create_history_changes(name, name)
     IS 'Creates an "OLD vs NEW" changes view on top of the specified history table';
-COMMENT ON FUNCTION create_history_changes(NAME)
+COMMENT ON FUNCTION create_history_changes(name)
     IS 'Creates an "OLD vs NEW" changes view on top of the specified history table';
 
 -- create_history_snapshots(source_schema, source_table, dest_schema, dest_view, resolution)
@@ -1187,25 +1189,23 @@ COMMENT ON FUNCTION create_history_changes(NAME)
 -------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION create_history_snapshots(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_view NAME,
-    resolution VARCHAR(12)
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_view name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE plpgsql
     VOLATILE
 AS $$
 DECLARE
-    ddl TEXT DEFAULT '';
-    r RECORD;
+    r record;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, source_table);
-    ddl :=
+    EXECUTE
         'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
         || x_history_snapshots(source_schema, source_table, resolution);
-    EXECUTE ddl;
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -1223,39 +1223,42 @@ BEGIN
     --CALL RESTORE_AUTH(DEST_SCHEMA, dest_view);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    ddl := 'COMMENT ON COLUMN '
+    EXECUTE
+        'COMMENT ON COLUMN '
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('snapshot')
         || ' IS ' || quote_literal('The date/timestamp of this row''s snapshot');
-    EXECUTE ddl;
-    ddl := 'COMMENT ON VIEW '
+    EXECUTE
+        'COMMENT ON VIEW '
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
         || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of snapshots');
-    EXECUTE ddl;
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND attnum > 2
     LOOP
-        ddl := 'COMMENT ON COLUMN '
+        EXECUTE
+            'COMMENT ON COLUMN '
             || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident(r.attname)
             || ' IS ' || quote_literal('Value of @' || source_schema || '.' || source_table || '.' || r.attdesc || ' prior to change');
-        EXECUTE ddl;
     END LOOP;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_snapshots(
-    source_table NAME,
-    dest_view NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    dest_view name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1266,10 +1269,10 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_snapshots(
-    source_table NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1280,22 +1283,22 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_snapshots(NAME, NAME, NAME, NAME, VARCHAR),
-    create_history_snapshots(NAME, NAME, VARCHAR),
-    create_history_snapshots(NAME, VARCHAR)
+    create_history_snapshots(name, name, name, name, varchar),
+    create_history_snapshots(name, name, varchar),
+    create_history_snapshots(name, varchar)
     TO utils_history_user;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_snapshots(NAME, NAME, NAME, NAME, VARCHAR),
-    create_history_snapshots(NAME, NAME, VARCHAR),
-    create_history_snapshots(NAME, VARCHAR)
+    create_history_snapshots(name, name, name, name, varchar),
+    create_history_snapshots(name, name, varchar),
+    create_history_snapshots(name, varchar)
     TO utils_history_admin WITH GRANT OPTION;
 
-COMMENT ON FUNCTION create_history_snapshots(NAME, NAME, NAME, NAME, VARCHAR)
+COMMENT ON FUNCTION create_history_snapshots(name, name, name, name, varchar)
     IS 'Creates an exploded view of the specified history table with one row per entity per resolution time-slice (e.g. daily, monthly, yearly, etc.)';
-COMMENT ON FUNCTION create_history_snapshots(NAME, NAME, VARCHAR)
+COMMENT ON FUNCTION create_history_snapshots(name, name, varchar)
     IS 'Creates an exploded view of the specified history table with one row per entity per resolution time-slice (e.g. daily, monthly, yearly, etc.)';
-COMMENT ON FUNCTION create_history_snapshots(NAME, VARCHAR)
+COMMENT ON FUNCTION create_history_snapshots(name, varchar)
     IS 'Creates an exploded view of the specified history table with one row per entity per resolution time-slice (e.g. daily, monthly, yearly, etc.)';
 
 -- create_history_triggers(source_schema, source_table, dest_schema, dest_table, resolution, offset)
@@ -1321,24 +1324,24 @@ COMMENT ON FUNCTION create_history_snapshots(NAME, VARCHAR)
 --
 -- The shift parameter specifies an SQL interval that will be used to offset
 -- the effective dates of new history records. For example, if the source table
--- is only updated a week in arrears, then offset could be set to "- INTERVAL
+-- is only updated a week in arrears, then offset could be set to "- interval
 -- '7 DAYS'" to cause the effective dates to be accurate.
 -------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION create_history_triggers(
-    source_schema NAME,
-    source_table NAME,
-    dest_schema NAME,
-    dest_table NAME,
-    resolution VARCHAR(12),
-    shift INTERVAL
+    source_schema name,
+    source_table name,
+    dest_schema name,
+    dest_table name,
+    resolution varchar(12),
+    shift interval
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE plpgsql
     VOLATILE
 AS $$
 DECLARE
-    r RECORD;
+    r record;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
     --CALL ASSERT_TABLE_EXISTS(DEST_SCHEMA, DEST_TABLE);
@@ -1391,7 +1394,8 @@ BEGIN
         || 'AS $func$ '
         || 'BEGIN '
         ||     'RAISE EXCEPTION USING '
-        ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ';'
+        ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ', '
+        ||         'TABLE = ' || quote_literal(CAST(quote_ident(source_schema) || '.' || quote_ident(source_table) AS regclass)) || '; '
         ||     'RETURN NULL; '
         || 'END; '
         || '$func$';
@@ -1478,12 +1482,12 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_triggers(
-    source_table NAME,
-    dest_table NAME,
-    resolution VARCHAR(12),
-    shift INTERVAL
+    source_table name,
+    dest_table name,
+    resolution varchar(12),
+    shift interval
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1494,11 +1498,11 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_triggers(
-    source_table NAME,
-    resolution VARCHAR(12),
-    shift INTERVAL
+    source_table name,
+    resolution varchar(12),
+    shift interval
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1509,10 +1513,10 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION create_history_triggers(
-    source_table NAME,
-    resolution VARCHAR(12)
+    source_table name,
+    resolution varchar(12)
 )
-    RETURNS VOID
+    RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
@@ -1523,26 +1527,26 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_triggers(NAME, NAME, NAME, NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, VARCHAR)
+    create_history_triggers(name, name, name, name, varchar, interval),
+    create_history_triggers(name, name, varchar, interval),
+    create_history_triggers(name, varchar, interval),
+    create_history_triggers(name, varchar)
     TO utils_history_user;
 
 GRANT EXECUTE ON FUNCTION
-    create_history_triggers(NAME, NAME, NAME, NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, VARCHAR, INTERVAL),
-    create_history_triggers(NAME, VARCHAR)
+    create_history_triggers(name, name, name, name, varchar, interval),
+    create_history_triggers(name, name, varchar, interval),
+    create_history_triggers(name, varchar, interval),
+    create_history_triggers(name, varchar)
     TO utils_history_admin WITH GRANT OPTION;
 
-COMMENT ON FUNCTION create_history_triggers(NAME, NAME, NAME, NAME, VARCHAR, INTERVAL)
+COMMENT ON FUNCTION create_history_triggers(name, name, name, name, varchar, interval)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
-COMMENT ON FUNCTION create_history_triggers(NAME, NAME, VARCHAR, INTERVAL)
+COMMENT ON FUNCTION create_history_triggers(name, name, varchar, interval)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
-COMMENT ON FUNCTION create_history_triggers(NAME, VARCHAR, INTERVAL)
+COMMENT ON FUNCTION create_history_triggers(name, varchar, interval)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
-COMMENT ON FUNCTION create_history_triggers(NAME, VARCHAR)
+COMMENT ON FUNCTION create_history_triggers(name, varchar)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
 
 -- vim: set et sw=4 sts=4:
