@@ -53,50 +53,30 @@ GRANT UTILS_HISTORY_USER TO UTILS_HISTORY_ADMIN WITH ADMIN OPTION;
 -- and functions in this module.
 -------------------------------------------------------------------------------
 
---CREATE VARIABLE HISTORY_KEY_FIELDS_STATE CHAR(5) CONSTANT '90004';
---CREATE VARIABLE HISTORY_NO_PK_STATE CHAR(5) CONSTANT '90005';
---CREATE VARIABLE HISTORY_UPDATE_PK_STATE CHAR(5) CONSTANT '90006';
---
---GRANT READ ON VARIABLE HISTORY_KEY_FIELDS_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_NO_PK_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_UPDATE_PK_STATE TO ROLE UTILS_HISTORY_USER;
---GRANT READ ON VARIABLE HISTORY_KEY_FIELDS_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---GRANT READ ON VARIABLE HISTORY_NO_PK_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---GRANT READ ON VARIABLE HISTORY_UPDATE_PK_STATE TO ROLE UTILS_HISTORY_ADMIN WITH GRANT OPTION;
---
---COMMENT ON VARIABLE HISTORY_KEY_FIELDS_STATE
---    IS 'The SQLSTATE raised when a history sub-routine is called with something other than ''Y'' or ''N'' as the KEY_FIELDS parameter';
---
---COMMENT ON VARIABLE HISTORY_NO_PK_STATE
---    IS 'The SQLSTATE raised when an attempt is made to create a history table for a table without a primary key';
---
---COMMENT ON VARIABLE HISTORY_UPDATE_PK_STATE
---    IS 'The SQLSTATE raised when an attempt is made to update a primary key''s value in a table with an associated history table';
-
--- X_HISTORY_PERIODLEN(RESOLUTION)
--- X_HISTORY_PERIODSTEP(RESOLUTION)
--- X_HISTORY_PERIODSTEP(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EFFNAME(RESOLUTION)
--- X_HISTORY_EFFNAME(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EXPNAME(RESOLUTION)
--- X_HISTORY_EXPNAME(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EFFDEFAULT(RESOLUTION)
--- X_HISTORY_EFFDEFAULT(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_EXPDEFAULT(RESOLUTION)
--- X_HISTORY_EXPDEFAULT(SOURCE_SCHEMA, SOURCE_TABLE)
--- X_HISTORY_PERIODSTART(RESOLUTION, EXPRESSION)
--- X_HISTORY_PERIODEND(RESOLUTION, EXPRESSION)
--- X_HISTORY_EFFNEXT(RESOLUTION, OFFSET)
--- X_HISTORY_EXPPRIOR(RESOLUTION, OFFSET)
--- X_HISTORY_INSERT(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION, OFFSET)
--- X_HISTORY_EXPIRE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION, OFFSET)
--- X_HISTORY_DELETE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_UPDATE(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_CHECK(SOURCE_SCHEMA, SOURCE_TABLE, DEST_SCHEMA, DEST_TABLE, RESOLUTION)
--- X_HISTORY_CHANGES(SOURCE_SCHEMA, SOURCE_TABLE, RESOLUTION)
--- X_HISTORY_SNAPSHOTS(SOURCE_SCHEMA, SOURCE_TABLE, RESOLUTION)
--- X_HISTORY_UPDATE_FIELDS(SOURCE_SCHEMA, SOURCE_TABLE, KEY_FIELDS)
--- X_HISTORY_UPDATE_WHEN(SOURCE_SCHEMA, SOURCE_TABLE, KEY_FIELDS)
+-- x_history_periodlen(resolution)
+-- x_history_periodstep(resolution)
+-- x_history_periodstep(source_schema, source_table)
+-- x_history_effname(resolution)
+-- x_history_effname(source_schema, source_table)
+-- x_history_expname(resolution)
+-- x_history_expname(source_schema, source_table)
+-- x_history_effdefault(resolution)
+-- x_history_effdefault(source_schema, source_table)
+-- x_history_expdefault(resolution)
+-- x_history_expdefault(source_schema, source_table)
+-- x_history_periodstart(resolution, expression)
+-- x_history_periodend(resolution, expression)
+-- x_history_effnext(resolution, offset)
+-- x_history_expprior(resolution, offset)
+-- x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, offset)
+-- x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, offset)
+-- x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_update(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_check(source_schema, source_table, dest_schema, dest_table, resolution)
+-- x_history_changes(source_schema, source_table, resolution)
+-- x_history_snapshots(source_schema, source_table, resolution)
+-- x_history_update_fields(source_schema, source_table, key_fields)
+-- x_history_update_when(source_schema, source_table, key_fields)
 -------------------------------------------------------------------------------
 -- These functions are effectively private utility subroutines for the
 -- procedures defined below. They simply generate snippets of SQL given a set
@@ -132,8 +112,10 @@ CREATE OR REPLACE FUNCTION x_history_periodstep(source_schema NAME, source_table
     STABLE
 AS $$
     VALUES (CASE (
-            SELECT format_type(atttypid, NULL)
-            FROM pg_catalog.pg_attribute
+            SELECT
+                format_type(atttypid, NULL)
+            FROM
+                pg_catalog.pg_attribute
             WHERE
                 attrelid = CAST(
                     quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -159,8 +141,10 @@ CREATE OR REPLACE FUNCTION x_history_effname(source_schema NAME, source_table NA
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT attname
-    FROM pg_catalog.pg_attribute
+    SELECT
+        attname
+    FROM
+        pg_catalog.pg_attribute
     WHERE
         attrelid = CAST(
             quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -181,8 +165,10 @@ CREATE OR REPLACE FUNCTION x_history_expname(source_schema NAME, source_table NA
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT attname
-    FROM pg_catalog.pg_attribute
+    SELECT
+        attname
+    FROM
+        pg_catalog.pg_attribute
     WHERE
         attrelid = CAST(
             quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -207,7 +193,8 @@ CREATE OR REPLACE FUNCTION x_history_effdefault(source_schema NAME, source_table
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT d.adsrc
+    SELECT
+        d.adsrc
     FROM
         pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
@@ -237,7 +224,8 @@ CREATE OR REPLACE FUNCTION x_history_expdefault(source_schema name, source_table
     LANGUAGE SQL
     STABLE
 AS $$
-    SELECT d.adsrc
+    SELECT
+        d.adsrc
     FROM
         pg_catalog.pg_attribute a
         JOIN pg_catalog.pg_attrdef d
@@ -325,8 +313,10 @@ BEGIN
     insert_stmt := insert_stmt || quote_ident(x_history_effname(dest_schema, dest_table));
     values_stmt := values_stmt || x_history_effnext(resolution, shift);
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -363,7 +353,8 @@ BEGIN
         || ' SET '   || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expprior(resolution, shift)
         || ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -402,7 +393,9 @@ BEGIN
     update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
     where_stmt := ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
+        SELECT
+            att.attname,
+            ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -446,7 +439,8 @@ BEGIN
     delete_stmt = 'DELETE FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table);
     where_stmt = ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -488,7 +482,8 @@ BEGIN
     where_stmt :=
         ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -531,7 +526,9 @@ BEGIN
         || ' BETWEEN old.' || x_history_effname(source_schema, source_table)
         || ' AND old.' || x_history_expname(source_schema, source_table);
     FOR r IN
-        SELECT att.attname, ARRAY [att.attnum] <@ con.conkey AS iskey
+        SELECT
+            att.attname,
+            ARRAY [att.attnum] <@ con.conkey AS iskey
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -606,8 +603,10 @@ BEGIN
         || ') '
         || 'SELECT ' || x_history_periodend(resolution, 'r.at') || ' AS snapshot';
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -639,7 +638,8 @@ DECLARE
     r RECORD;
 BEGIN
     FOR r IN
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -756,7 +756,6 @@ AS $$
 DECLARE
     key_name NAME DEFAULT '';
     key_cols TEXT DEFAULT '';
-    ddl TEXT DEFAULT '';
     r RECORD;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
@@ -785,15 +784,18 @@ BEGIN
     -- declared in the primary key (for generation of constraints later)
     FOR r IN
         WITH subscripts(i) AS (
-            SELECT generate_subscripts(conkey, 1)
-            FROM pg_catalog.pg_constraint
+            SELECT
+                generate_subscripts(conkey, 1)
+            FROM
+                pg_catalog.pg_constraint
             WHERE
                 conrelid = CAST(
                     quote_ident(source_schema) || '.' || quote_ident(source_table)
                     AS regclass)
                 AND contype = 'p'
         )
-        SELECT att.attname
+        SELECT
+            att.attname
         FROM
             pg_catalog.pg_attribute att
             JOIN pg_catalog.pg_constraint con
@@ -812,7 +814,7 @@ BEGIN
             || quote_ident(r.attname) || ',';
     END LOOP;
     -- Create the history table based on the source table
-    ddl :=
+    EXECUTE
         'CREATE TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' AS '
         || '('
         ||     'SELECT '
@@ -822,16 +824,14 @@ BEGIN
         ||     'FROM '
         ||          quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS t'
         || ')'
-        || 'WITH NO DATA ';
-    IF dest_tbspace IS NOT NULL THEN
-        ddl := ddl || 'TABLESPACE ' || quote_ident(dest_tbspace);
-    END IF;
-    EXECUTE ddl;
+        || 'WITH NO DATA '
+        || CASE WHEN dest_tbspace IS NOT NULL THEN 'TABLESPACE ' || quote_ident(dest_tbspace) ELSE '' END;
     -- Copy NOT NULL constraints from the source table to the history table
-    ddl := '';
     FOR r IN
-        SELECT attname
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -839,27 +839,27 @@ BEGIN
             AND attnotnull
             AND attnum > 0
     LOOP
-        ddl :=
+        EXECUTE
             'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
             || ' ALTER COLUMN ' || quote_ident(r.attname) || ' SET NOT NULL';
-        EXECUTE ddl;
     END LOOP;
     -- Copy CHECK and EXCLUDE constraints from the source table to the history
     -- table. Note that we do not copy FOREIGN KEY constraints as there's no
     -- good method of matching a parent record in a historized table.
-    ddl := '';
     FOR r IN
-        SELECT pg_get_constraintdef(oid) AS ddl
-        FROM pg_catalog.pg_constraint
+        SELECT
+            pg_get_constraintdef(oid) AS con_def
+        FROM
+            pg_catalog.pg_constraint
         WHERE
             conrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND contype IN ('c', 'x')
     LOOP
-        ddl :=
+        EXECUTE
             'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-            || ' ADD ' || r.ddl;
+            || ' ADD ' || r.con_def;
     END LOOP;
     -- Create two unique constraints, both based on the source table's primary
     -- key, plus the EFFECTIVE and EXPIRY fields respectively. Use INCLUDE for
@@ -867,68 +867,63 @@ BEGIN
     -- the same as those included in the primary key of the source table.
     -- TODO tablespaces...
     key_name := quote_ident(dest_table || '_pkey');
-    ddl :=
+    EXECUTE
         'CREATE UNIQUE INDEX '
         || key_name || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || key_cols || quote_ident(x_history_effname(resolution))
         || ')';
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'CREATE UNIQUE INDEX '
         || quote_ident(dest_table || '_ix1') || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || key_cols || quote_ident(x_history_expname(resolution))
         || ')';
-    EXECUTE ddl;
     -- Create additional indexes that are useful for performance purposes
-    ddl :=
+    EXECUTE
         'CREATE INDEX '
         || quote_ident(dest_table || '_ix2') || ' '
         || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || '(' || quote_ident(x_history_effname(resolution))
         || ',' || quote_ident(x_history_expname(resolution))
         || ')';
-    EXECUTE ddl;
     -- Create a primary key with the same fields as the EFFECTIVE index defined
     -- above.
-    ddl :=
+    EXECUTE
         'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
         || 'ADD PRIMARY KEY USING INDEX ' || key_name || ', '
         || 'ADD CHECK (' || quote_ident(x_history_effname(resolution)) || ' <= ' || quote_ident(x_history_expname(resolution)) || '), '
         || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
         || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
-    EXECUTE ddl;
     -- TODO authorizations; needs auth.sql first
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    ddl :=
+    EXECUTE
         'COMMENT ON TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
         || ' IS ' || quote_literal('History table which tracks the content of @' || source_schema || '.' || source_table);
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_effname(resolution))
         || ' IS ' || quote_literal('The date/timestamp from which this row was present in the source table');
-    EXECUTE ddl;
-    ddl :=
+    EXECUTE
         'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_expname(resolution))
         || ' IS ' || quote_literal('The date/timestamp until which this row was present in the source table (rows with 9999-12-31 currently exist in the source table)');
-    EXECUTE ddl;
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND attnum > 0
     LOOP
-        ddl :=
+        EXECUTE
             'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(r.attname)
             || ' IS ' || quote_literal(r.attdesc);
-        EXECUTE ddl;
     END LOOP;
 END;
 $$;
@@ -960,7 +955,8 @@ AS $$
     VALUES (
         create_history_table(
             source_table, dest_table, (
-                SELECT spc.spcname
+                SELECT
+                    spc.spcname
                 FROM
                     pg_catalog.pg_class cls
                     LEFT JOIN pg_catalog.pg_tablespace spc
@@ -1087,10 +1083,13 @@ BEGIN
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
         || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of changes');
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
@@ -1198,14 +1197,12 @@ CREATE OR REPLACE FUNCTION create_history_snapshots(
     VOLATILE
 AS $$
 DECLARE
-    ddl TEXT DEFAULT '';
     r RECORD;
 BEGIN
     --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, source_table);
-    ddl :=
+    EXECUTE
         'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
         || x_history_snapshots(source_schema, source_table, resolution);
-    EXECUTE ddl;
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -1223,29 +1220,32 @@ BEGIN
     --CALL RESTORE_AUTH(DEST_SCHEMA, dest_view);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    ddl := 'COMMENT ON COLUMN '
+    EXECUTE
+        'COMMENT ON COLUMN '
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('snapshot')
         || ' IS ' || quote_literal('The date/timestamp of this row''s snapshot');
-    EXECUTE ddl;
-    ddl := 'COMMENT ON VIEW '
+    EXECUTE
+        'COMMENT ON VIEW '
         || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
         || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of snapshots');
-    EXECUTE ddl;
     FOR r IN
-        SELECT attname, COALESCE(col_description(CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass), attnum), '') AS attdesc
-        FROM pg_catalog.pg_attribute
+        SELECT
+            attname,
+            COALESCE(col_description(CAST(
+                quote_ident(source_schema) || '.' || quote_ident(source_table)
+                AS regclass), attnum), '') AS attdesc
+        FROM
+            pg_catalog.pg_attribute
         WHERE
             attrelid = CAST(
                 quote_ident(source_schema) || '.' || quote_ident(source_table)
                 AS regclass)
             AND attnum > 2
     LOOP
-        ddl := 'COMMENT ON COLUMN '
+        EXECUTE
+            'COMMENT ON COLUMN '
             || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident(r.attname)
             || ' IS ' || quote_literal('Value of @' || source_schema || '.' || source_table || '.' || r.attdesc || ' prior to change');
-        EXECUTE ddl;
     END LOOP;
 END;
 $$;
@@ -1391,7 +1391,8 @@ BEGIN
         || 'AS $func$ '
         || 'BEGIN '
         ||     'RAISE EXCEPTION USING '
-        ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ';'
+        ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ', '
+        ||         'TABLE = ' || quote_literal(CAST(quote_ident(source_schema) || '.' || quote_ident(source_table) AS regclass)) || '; '
         ||     'RETURN NULL; '
         || 'END; '
         || '$func$';
