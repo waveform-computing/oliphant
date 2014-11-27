@@ -40,12 +40,12 @@
 -- created by this module.
 -------------------------------------------------------------------------------
 
-CREATE ROLE UTILS_HISTORY_USER;
-CREATE ROLE UTILS_HISTORY_ADMIN;
+CREATE ROLE utils_history_user;
+CREATE ROLE utils_history_admin;
 
---GRANT UTILS_HISTORY_USER TO UTILS_USER;
-GRANT UTILS_HISTORY_USER TO UTILS_HISTORY_ADMIN WITH ADMIN OPTION;
---GRANT UTILS_HISTORY_ADMIN TO UTILS_ADMIN WITH ADMIN OPTION;
+--GRANT utils_history_user TO utils_user;
+GRANT utils_history_user TO utils_history_admin WITH ADMIN OPTION;
+--GRANT utils_history_admin TO utils_admin WITH ADMIN OPTION;
 
 -- SQLSTATES
 -------------------------------------------------------------------------------
