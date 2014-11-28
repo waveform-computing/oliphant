@@ -400,6 +400,10 @@ ALTER TABLE saved_auths
 
 GRANT ALL ON TABLE
     saved_auths
+    TO utils_auth_user;
+
+GRANT ALL ON TABLE
+    saved_auths
     TO utils_auth_admin WITH GRANT OPTION;
 
 COMMENT ON TABLE saved_auths
