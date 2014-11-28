@@ -86,8 +86,8 @@ AS $$
     WITH
     role_auths AS (
         SELECT
-            CAST('' AS varchar),
-            CAST('' AS varchar),
+            ''::varchar,
+            ''::varchar,
             quote_ident(rolname),
             CASE WHEN pg_has_role(auth_name, rolname, 'USAGE WITH ADMIN OPTION')
                 THEN 'WITH ADMIN OPTION'
@@ -100,10 +100,10 @@ AS $$
     ),
     table_auths AS (
         SELECT
-            CAST('TABLE' AS varchar),
+            'TABLE'::varchar,
             quote_ident(table_schema) || '.' || quote_ident(table_name),
             privilege_type,
-            CASE WHEN is_grantable THEN 'WITH GRANT OPTION' ELSE '' END
+            CASE WHEN is_grantable::boolean THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
             information_schema.table_privileges
         WHERE
@@ -111,10 +111,10 @@ AS $$
     ),
     routine_auths AS (
         SELECT
-            CAST('FUNCTION' AS varchar),
+            'FUNCTION'::varchar,
             quote_ident(specific_schema) || '.' || quote_ident(specific_name),
-            CAST('EXECUTE' AS varchar),
-            CASE WHEN is_grantable THEN 'WITH GRANT OPTION' ELSE '' END
+            'EXECUTE'::varchar,
+            CASE WHEN is_grantable::boolean THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
             information_schema.routine_privileges
         WHERE

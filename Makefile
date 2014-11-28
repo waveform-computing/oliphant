@@ -1,4 +1,4 @@
-DBNAME:=sample
+DBNAME:=ark
 SCHEMANAME:=utils
 
 VERSION:=0.1
@@ -8,10 +8,10 @@ ALL_SQL:=$(filter-out install.sql uninstall.sql,$(wildcard *.sql))
 ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
 
 install: install.sql
-	psql -f $<
+	psql -d $(DBNAME) -f $<
 
 uninstall: uninstall.sql
-	psql -f $<
+	psql -d $(DBNAME) -f $<
 
 doc:
 	$(MAKE) -C docs html
@@ -20,8 +20,8 @@ test:
 	$(MAKE) -C tests test DBNAME=$(DBNAME) SCHEMANAME=$(SCHEMANAME)
 
 clean: $(SUBDIRS)
-	$(MAKE) -C docs clean
-	$(MAKE) -C tests clean
+	#$(MAKE) -C docs clean
+	#$(MAKE) -C tests clean
 	rm -f foo
 	rm -f *.foo
 	rm -f utils.sql
@@ -48,9 +48,7 @@ install.sql: $(ALL_FOO)
 uninstall.sql: install.sql
 	echo "\c $(DBNAME)" > $@
 	echo "SET search_path TO $(SCHEMANAME), public;" >> $@
-	echo "BEGIN;" >> $@
-	awk -f uninstall.awk $< | tac >> $@
-	echo "COMMIT;" >> $@
+	awk -f uninstall.awk $< >> $@
 
 #assert.foo: utils.foo sql.foo
 
