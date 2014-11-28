@@ -83,26 +83,7 @@ CREATE OR REPLACE FUNCTION auths_held(
     LANGUAGE SQL
     STABLE
 AS $$
-    WITH all_db_auths(auth) AS (
-        VALUES
-            ('CREATE'),
-            ('CONNECT'),
-            ('TEMPORARY')
-    ),
-    db_auths AS (
-        SELECT
-            CAST('DATABASE' AS varchar),
-            CAST(current_database() AS varchar),
-            auth,
-            CASE WHEN has_database_privilege(auth_name, current_database(), auth || ' WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            all_db_auths
-        WHERE
-            has_database_privilege(auth_name, current_database(), auth)
-    ),
+    WITH
     role_auths AS (
         SELECT
             CAST('' AS varchar),
@@ -117,156 +98,32 @@ AS $$
         WHERE
             pg_has_role(auth_name, rolname, 'USAGE')
     ),
-    foreign_data_wrapper_auths AS (
-        SELECT
-            CAST('FOREIGN DATA WRAPPER' AS varchar),
-            quote_ident(fdwname),
-            CAST('USAGE' AS varchar),
-            CASE WHEN has_foreign_data_wrapper_privilege(auth_name, quote_ident(fdwname), 'USAGE WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            pg_catalog.pg_foreign_data_wrapper
-        WHERE
-            has_foreign_data_wrapper_privilege(auth_name, quote_ident(fdwname), 'USAGE')
-    ),
-    foreign_server_auths AS (
-        SELECT
-            CAST('FOREIGN SERVER' AS varchar),
-            quote_ident(srvname),
-            CAST('USAGE' AS varchar),
-            CASE WHEN has_server_privilege(auth_name, quote_ident(srvname), 'USAGE WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            pg_catalog.pg_foreign_server
-        WHERE
-            has_server_privilege(auth_name, quote_ident(srvname), 'USAGE')
-    ),
-    function_auths AS (
-        SELECT
-            CAST('FUNCTION' AS varchar),
-            CAST(CAST(oid AS regprocedure) AS varchar),
-            CAST('EXECUTE' AS varchar),
-            CASE WHEN has_function_privilege(auth_name, CAST(oid AS regprocedure), 'EXECUTE WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            pg_catalog.pg_proc
-        WHERE
-            has_function_privilege(auth_name, CAST(oid AS regprocedure), 'EXECUTE')
-    ),
-    language_auths AS (
-        SELECT
-            CAST('LANGUAGE' AS varchar),
-            quote_ident(lanname),
-            CAST('USAGE' AS varchar),
-            CASE WHEN has_language_privilege(auth_name, quote_ident(lanname), 'USAGE WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            pg_catalog.pg_language
-        WHERE
-            has_language_privilege(auth_name, quote_ident(lanname), 'USAGE')
-            AND lanpltrusted
-    ),
-    all_schema_auths(auth) AS (
-        VALUES
-            ('CREATE'),
-            ('USAGE')
-    ),
-    schema_auths AS (
-        SELECT
-            CAST('SCHEMA' AS varchar),
-            quote_ident(nspname),
-            auth,
-            CASE WHEN has_schema_privilege(auth_name, quote_ident(nspname), auth || ' WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
-        FROM
-            pg_catalog.pg_namespace
-            CROSS JOIN all_schema_auths
-        WHERE
-            has_schema_privilege(auth_name, quote_ident(nspname), auth)
-    ),
-    all_sequence_auths(auth) AS (
-        VALUES
-            ('SELECT'),
-            ('USAGE'),
-            ('UPDATE')
-    ),
-    sequence_auths AS (
-        SELECT
-            CAST('SEQUENCE' AS varchar),
-            CAST(CAST(oid AS regclass) AS varchar),
-            auth,
-            -- XXX There seems to be an issue that although WITH GRANT OPTION
-            -- is implemented by GRANT on sequences, it's not supported by the
-            -- has_sequence_privilege() function. Might want to submit a patch
-            -- for this...
-            CAST('' AS varchar)
-        FROM
-            pg_catalog.pg_class,
-            all_sequence_auths
-        WHERE
-            has_sequence_privilege(auth_name, CAST(oid AS regclass), auth)
-            AND relkind = 'S'
-    ),
-    all_table_auths(auth) AS (
-        VALUES
-            ('SELECT'),
-            ('INSERT'),
-            ('UPDATE'),
-            ('DELETE'),
-            ('TRUNCATE'),
-            ('REFERENCES'),
-            ('TRIGGER')
-    ),
     table_auths AS (
         SELECT
             CAST('TABLE' AS varchar),
-            CAST(CAST(oid AS regclass) AS varchar),
-            auth,
-            CASE WHEN has_table_privilege(auth_name, CAST(oid AS regclass), auth || ' WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
+            quote_ident(table_schema) || '.' || quote_ident(table_name),
+            privilege_type,
+            CASE WHEN is_grantable THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
-            pg_catalog.pg_class,
-            all_table_auths
+            information_schema.table_privileges
         WHERE
-            has_table_privilege(auth_name, CAST(oid AS regclass), auth)
-            AND relkind IN ('r', 'v', 'm')
+            grantee = auth_name
     ),
-    tablespace_auths AS (
+    routine_auths AS (
         SELECT
-            CAST('TABLESPACE' AS varchar),
-            quote_ident(spcname),
-            CAST('CREATE' AS varchar),
-            CASE WHEN has_tablespace_privilege(auth_name, quote_ident(spcname), 'CREATE WITH GRANT OPTION')
-                THEN 'WITH GRANT OPTION'
-                ELSE ''
-            END
+            CAST('FUNCTION' AS varchar),
+            quote_ident(specific_schema) || '.' || quote_ident(specific_name),
+            CAST('EXECUTE' AS varchar),
+            CASE WHEN is_grantable THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
-            pg_catalog.pg_tablespace
+            information_schema.routine_privileges
         WHERE
-            has_tablespace_privilege(auth_name, quote_ident(spcname), 'CREATE')
+            grantee = auth_name
     )
-    SELECT * FROM db_auths                   UNION
     SELECT * FROM role_auths                 UNION
-    SELECT * FROM foreign_data_wrapper_auths UNION
-    SELECT * FROM foreign_server_auths       UNION
-    SELECT * FROM function_auths             UNION
-    SELECT * FROM language_auths             UNION
-    SELECT * FROM schema_auths               UNION
-    SELECT * FROM sequence_auths             UNION
-    SELECT * FROM table_auths                UNION
-    SELECT * FROM tablespace_auths;
+    -- XXX specific name isn't usable for anything at this time
+    --SELECT * FROM routine_auths              UNION
+    SELECT * FROM table_auths;
 $$;
 
 GRANT EXECUTE ON FUNCTION
@@ -529,27 +386,24 @@ COMMENT ON FUNCTION move_auth(name, name)
 -- for use by the save_auth and restore_auth procedures below.
 -------------------------------------------------------------------------------
 
-CREATE TABLE saved_auth AS (
-    SELECT * FROM auths_held(current_user)
-)
-WITH NO DATA;
+CREATE TABLE saved_auths AS (
+    SELECT table_schema, table_name, grantee, privilege_type, is_grantable::boolean
+    FROM information_schema.table_privileges
+) WITH NO DATA;
 
-CREATE UNIQUE INDEX saved_auth_pk
-    ON saved_auth (
-        object_type,
-        object_id,
-        auth
-    );
+CREATE UNIQUE INDEX saved_auths_pk
+    ON saved_auths (table_schema, table_name, grantee, privilege_type);
 
-ALTER TABLE saved_auth
-    ADD PRIMARY KEY USING INDEX saved_auth_pk;
+ALTER TABLE saved_auths
+    ADD PRIMARY KEY USING INDEX saved_auths_pk,
+    ALTER COLUMN is_grantable SET NOT NULL;
 
 GRANT ALL ON TABLE
-    saved_auth
+    saved_auths
     TO utils_auth_admin WITH GRANT OPTION;
 
-COMMENT ON TABLE saved_auth
-    IS 'Utility table used for temporary storage of authorizations by save_auth, save_auths, restore_auth and restore_auths et al';
+COMMENT ON TABLE saved_auths
+    IS 'Utility table used for temporary storage of authorizations by save_auth, save_auths, restore_auth and restore_auths';
 
 -- save_auth(aschema, atable)
 -- save_auth(atable)
@@ -562,3 +416,149 @@ COMMENT ON TABLE saved_auth
 -- NOTE: Column specific authorizations are NOT saved and restored by these
 -- procedures.
 -------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION save_auth(aschema name, atable name)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    WITH data AS (
+        SELECT DISTINCT
+            grantee,
+            privilege_type,
+            bool_or(is_grantable::boolean) AS is_grantable
+        FROM
+            information_schema.table_privileges
+        WHERE
+            table_catalog = current_database()
+            AND table_schema = 'ark_poc'
+            AND table_name = 'students'
+        GROUP BY
+            grantee,
+            privilege_type
+    ),
+    upsert AS (
+        UPDATE saved_auths AS dest SET
+            is_grantable = src.is_grantable
+        FROM
+            data AS src
+        WHERE
+            dest.table_schema = 'ark_poc'
+            AND dest.table_name = 'students'
+            AND dest.grantee = src.grantee
+            AND dest.privilege_type = src.privilege_type
+        RETURNING
+            src.grantee, src.privilege_type
+    )
+    INSERT INTO saved_auths (
+        table_schema,
+        table_name,
+        grantee,
+        privilege_type,
+        is_grantable
+    )
+    SELECT
+        'ark_poc',
+        'students',
+        grantee,
+        privilege_type,
+        is_grantable
+    FROM
+        data
+    WHERE
+        ROW (grantee, privilege_type) NOT IN (
+            SELECT grantee, privilege_type FROM upsert
+        );
+$$;
+
+CREATE OR REPLACE FUNCTION save_auth(atable name)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (save_auth(current_schema, atable));
+$$;
+
+GRANT EXECUTE ON FUNCTION
+    save_auth(name, name),
+    save_auth(name)
+    TO utils_auth_user;
+
+GRANT EXECUTE ON FUNCTION
+    save_auth(name, name),
+    save_auth(name)
+    TO utils_auth_admin WITH GRANT OPTION;
+
+COMMENT ON FUNCTION save_auth(name, name)
+    IS 'Saves the authorizations of the specified relation for later restoration with the RESTORE_AUTH procedure';
+COMMENT ON FUNCTION save_auth(name)
+    IS 'Saves the authorizations of the specified relation for later restoration with the RESTORE_AUTH procedure';
+
+-- restore_auth(aschema, atable)
+-- restore_auth(atable)
+-------------------------------------------------------------------------------
+-- restore_auth is a utility procedure which restores the authorization
+-- privileges for a table or view, previously saved by the save_auth procedure
+-- defined above.
+--
+-- NOTE: Privileges may not be precisely restored. Specifically, the grantor in
+-- the restored privileges may be different to the original grantor if you are
+-- not the user that originally granted the privileges, or the original
+-- privileges were granted by the system. Furthermore, column specific
+-- authorizations are NOT saved and restored by these procedures.
+-------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION restore_auth(aschema name, atable name)
+    RETURNS void
+    LANGUAGE plpgsql
+    VOLATILE
+AS $$
+DECLARE
+    r record;
+BEGIN
+    FOR r IN
+        WITH data AS (
+            DELETE FROM saved_auths
+            WHERE
+                table_schema = aschema
+                AND table_name = atable
+            RETURNING grantee, privilege_type, is_grantable
+        )
+        SELECT
+            'GRANT '
+            || privilege_type
+            || ' ON ' || quote_ident(aschema) || '.' || quote_ident(atable)
+            || ' TO ' || quote_ident(grantee)
+            || CASE is_grantable WHEN true THEN ' WITH GRANT OPTION' ELSE '' END AS ddl
+        FROM
+            data
+    LOOP
+        EXECUTE r.ddl;
+    END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION restore_auth(atable name)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (restore_auth(current_schema, atable));
+$$;
+
+GRANT EXECUTE ON FUNCTION
+    restore_auth(name, name),
+    restore_auth(name)
+    TO utils_auth_user;
+
+GRANT EXECUTE ON FUNCTION
+    restore_auth(name, name),
+    restore_auth(name)
+    TO utils_auth_admin WITH GRANT OPTION;
+
+COMMENT ON FUNCTION restore_auth(name, name)
+    IS 'Restores authorizations previously saved by SAVE_AUTH for the specified table';
+COMMENT ON FUNCTION restore_auth(name)
+    IS 'Restores authorizations previously saved by SAVE_AUTH for the specified table';
+
+-- vim: set et sw=4 sts=4:

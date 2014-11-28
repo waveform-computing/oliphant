@@ -365,6 +365,7 @@ BEGIN
                 AS regclass)
             AND att.attnum > 0
             AND con.contype = 'p'
+            AND ARRAY [att.attnum] <@ con.conkey
     LOOP
         update_stmt := update_stmt
             || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
@@ -898,7 +899,19 @@ BEGIN
         || 'ADD CHECK (' || quote_ident(x_history_effname(resolution)) || ' <= ' || quote_ident(x_history_expname(resolution)) || '), '
         || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
         || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
-    -- TODO authorizations; needs auth.sql first
+    -- Store the source table's authorizations, then redirect them to the
+    -- destination table filtering out those authorizations which should be
+    -- excluded
+    PERFORM save_auth(source_schema, source_table);
+    UPDATE saved_auths SET
+        table_schema = dest_schema,
+        table_name = dest_table
+    WHERE
+        table_schema = source_schema
+        AND table_name = source_table;
+    DELETE FROM saved_auths WHERE
+        privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE');
+    PERFORM restore_auth(dest_schema, dest_table);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
     EXECUTE
@@ -1059,18 +1072,16 @@ BEGIN
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
-    --CALL SAVE_AUTH(SOURCE_SCHEMA, SOURCE_TABLE);
-    --UPDATE SAVED_AUTH SET
-    --    TABSCHEMA = DEST_SCHEMA,
-    --    TABNAME = DEST_VIEW,
-    --    DELETEAUTH = 'N',
-    --    INSERTAUTH = 'N',
-    --    UPDATEAUTH = 'N',
-    --    INDEXAUTH = 'N',
-    --    REFAUTH = 'N'
-    --WHERE TABSCHEMA = SOURCE_SCHEMA
-    --    AND TABNAME = SOURCE_TABLE;
-    --CALL RESTORE_AUTH(DEST_SCHEMA, DEST_VIEW);
+    PERFORM save_auth(source_schema, source_table);
+    UPDATE saved_auths SET
+        table_schema = dest_schema,
+        table_name = dest_view
+    WHERE
+        table_schema = source_schema
+        AND table_name = source_table;
+    DELETE FROM saved_auths WHERE
+        privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
+    PERFORM restore_auth(dest_schema, dest_view);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
     EXECUTE
@@ -1209,18 +1220,16 @@ BEGIN
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
-    --CALL SAVE_AUTH(source_schema, source_table);
-    --UPDATE SAVED_AUTH SET
-    --    TABSCHEMA = DEST_SCHEMA,
-    --    TABNAME = dest_view,
-    --    DELETEAUTH = 'N',
-    --    INSERTAUTH = 'N',
-    --    UPDATEAUTH = 'N',
-    --    INDEXAUTH = 'N',
-    --    REFAUTH = 'N'
-    --WHERE TABSCHEMA = source_schema
-    --    AND TABNAME = source_table;
-    --CALL RESTORE_AUTH(DEST_SCHEMA, dest_view);
+    PERFORM save_auth(source_schema, source_table);
+    UPDATE saved_auths SET
+        table_schema = dest_schema,
+        table_name = dest_view
+    WHERE
+        table_schema = source_schema
+        AND table_name = source_table;
+    DELETE FROM saved_auths WHERE
+        privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
+    PERFORM restore_auth(dest_schema, dest_view);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
     EXECUTE
@@ -1438,9 +1447,19 @@ BEGIN
         ||     '); '
         ||     'IF ' || x_history_effnext(resolution, shift) || ' > chk_date THEN '
         ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
+        ||         'IF NOT found THEN '
+        ||             'RAISE EXCEPTION USING '
+        ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
+        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||         'END IF; '
         ||         x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
         ||     'ELSE '
         ||         x_history_update(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
+        ||         'IF NOT found THEN '
+        ||             'RAISE EXCEPTION USING '
+        ||                 'MESSAGE = ' || quote_literal('Failed to update current history row') || ', '
+        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||         'END IF; '
         ||     'END IF; '
         ||     'RETURN NEW; '
         || 'END; '
@@ -1467,8 +1486,18 @@ BEGIN
         ||     '); '
         ||     'IF ' || x_history_effnext(resolution, shift) || ' > chk_date THEN '
         ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
+        ||         'IF NOT found THEN '
+        ||             'RAISE EXCEPTION USING '
+        ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
+        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||         'END IF; '
         ||     'ELSE '
         ||         x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
+        ||         'IF NOT found THEN '
+        ||             'RAISE EXCEPTION USING '
+        ||                 'MESSAGE = ' || quote_literal('Failed to delete current history row') || ', '
+        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||         'END IF; '
         ||     'END IF; '
         ||     'RETURN OLD; '
         || 'END; '
