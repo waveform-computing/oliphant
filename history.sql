@@ -601,7 +601,7 @@ BEGIN
         || '    SELECT min(' || quote_ident(x_history_effname(source_schema, source_table)) || ')'
         || '    FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table)
         || '    UNION ALL'
-        || '    SELECT at + ' || x_history_periodlen(resolution)
+        || '    SELECT at + interval ' || quote_literal(x_history_periodlen(resolution))
         || '    FROM range'
         || '    WHERE at <= ' || x_history_effdefault(resolution)
         || ') '
