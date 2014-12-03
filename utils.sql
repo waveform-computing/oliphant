@@ -35,3 +35,11 @@ CREATE ROLE utils_admin;
 GRANT USAGE ON SCHEMA %SCHEMANAME% TO utils_user;
 GRANT ALL ON SCHEMA %SCHEMANAME% TO utils_admin WITH GRANT OPTION;
 
+CREATE FUNCTION table_oid(aschema name, atable name)
+    RETURNS regclass
+    LANGUAGE SQL
+    STABLE
+AS $$
+    VALUES ((quote_ident(aschema) || '.' || quote_ident(atable))::regclass);
+$$;
+

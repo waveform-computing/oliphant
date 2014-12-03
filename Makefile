@@ -8,10 +8,10 @@ ALL_SQL:=assert.sql auth.sql history.sql utils.sql
 ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
 
 install: install.sql
-	psql -d $(DBNAME) -f $<
+	psql -1 -d $(DBNAME) -f $<
 
 uninstall: uninstall.sql
-	psql -d $(DBNAME) -f $<
+	psql -1 -d $(DBNAME) -f $<
 
 doc:
 	$(MAKE) -C docs html
@@ -35,11 +35,9 @@ clean: $(SUBDIRS)
 
 install.sql: $(ALL_FOO)
 	echo "\c $(DBNAME)" > $@
-	echo "BEGIN;" >> $@
 	cat foo >> $@
 	echo "REVOKE ALL ON ALL TABLES IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
 	echo "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
-	echo "COMMIT;" >> $@
 	rm foo
 	rm -f *.foo
 

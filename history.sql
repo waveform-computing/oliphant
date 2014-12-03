@@ -85,7 +85,7 @@ AS $$
     VALUES (CASE resolution
         WHEN 'quarter' THEN interval '3 months'
         WHEN 'millennium' THEN interval '1000 years'
-        ELSE CAST('1 ' || resolution AS interval)
+        ELSE ('1 ' || resolution)::interval
     END);
 $$;
 
@@ -111,9 +111,7 @@ AS $$
             FROM
                 pg_catalog.pg_attribute
             WHERE
-                attrelid = CAST(
-                    quote_ident(source_schema) || '.' || quote_ident(source_table)
-                    AS regclass)
+                attrelid = table_oid(source_schema, source_table)
                 AND attnum = 1
             )
         WHEN 'timestamp without time zone' THEN interval '1 microsecond'
@@ -127,7 +125,7 @@ CREATE FUNCTION x_history_effname(resolution varchar(12))
     LANGUAGE SQL
     IMMUTABLE
 AS $$
-    VALUES (CAST('effective' AS name));
+    VALUES ('effective'::name);
 $$;
 
 CREATE FUNCTION x_history_effname(source_schema name, source_table name)
@@ -140,9 +138,7 @@ AS $$
     FROM
         pg_catalog.pg_attribute
     WHERE
-        attrelid = CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass)
+        attrelid = table_oid(source_schema, source_table)
         AND attnum = 1;
 $$;
 
@@ -151,7 +147,7 @@ CREATE FUNCTION x_history_expname(resolution varchar(12))
     LANGUAGE SQL
     IMMUTABLE
 AS $$
-    VALUES (CAST('expiry' AS name));
+    VALUES ('expiry'::name);
 $$;
 
 CREATE FUNCTION x_history_expname(source_schema name, source_table name)
@@ -164,9 +160,7 @@ AS $$
     FROM
         pg_catalog.pg_attribute
     WHERE
-        attrelid = CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass)
+        attrelid = table_oid(source_schema, source_table)
         AND attnum = 2;
 $$;
 
@@ -195,9 +189,7 @@ AS $$
             ON d.adrelid = a.attrelid
             AND d.adnum = a.attnum
     WHERE
-        a.attrelid = CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass)
+        a.attrelid = table_oid(source_schema, source_table)
         AND a.attnum = 1;
 $$;
 
@@ -226,9 +218,7 @@ AS $$
             ON d.adrelid = a.attrelid
             AND d.adnum = a.attnum
     WHERE
-        a.attrelid = CAST(
-            quote_ident(source_schema) || '.' || quote_ident(source_table)
-            AS regclass)
+        a.attrelid = table_oid(source_schema, source_table)
         AND a.attnum = 2;
 $$;
 
@@ -312,9 +302,7 @@ BEGIN
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnum > 0
         ORDER BY attnum
     LOOP
@@ -354,9 +342,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
@@ -396,9 +382,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
             AND con.contype = 'p'
     LOOP
@@ -441,9 +425,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
@@ -487,9 +469,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
@@ -532,9 +512,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 2
     LOOP
@@ -606,9 +584,7 @@ BEGIN
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
         ORDER BY attnum
     LOOP
@@ -643,9 +619,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
             AND (
@@ -680,9 +654,7 @@ BEGIN
             JOIN pg_catalog.pg_constraint con
                 ON con.conrelid = att.attrelid
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
             AND (
@@ -756,7 +728,7 @@ DECLARE
     key_cols text DEFAULT '';
     r record;
 BEGIN
-    --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
+    PERFORM assert_table_exists(source_schema, source_table);
     -- Check the source table has a primary key
     --IF (SELECT COALESCE(KEYCOLUMNS, 0)
     --    FROM SYSCAT.TABLES
@@ -787,9 +759,7 @@ BEGIN
             FROM
                 pg_catalog.pg_constraint
             WHERE
-                conrelid = CAST(
-                    quote_ident(source_schema) || '.' || quote_ident(source_table)
-                    AS regclass)
+                conrelid = table_oid(source_schema, source_table)
                 AND contype = 'p'
         )
         SELECT
@@ -801,9 +771,7 @@ BEGIN
             JOIN subscripts sub
                 ON att.attnum = con.conkey[sub.i]
         WHERE
-            att.attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
         ORDER BY sub.i
@@ -831,9 +799,7 @@ BEGIN
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnotnull
             AND attnum > 0
     LOOP
@@ -850,9 +816,7 @@ BEGIN
         FROM
             pg_catalog.pg_constraint
         WHERE
-            conrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            conrelid = table_oid(source_schema, source_table)
             AND contype IN ('c', 'x')
     LOOP
         EXECUTE
@@ -920,15 +884,13 @@ BEGIN
     FOR r IN
         SELECT
             attname,
-            COALESCE(col_description(CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass), attnum), '') AS attdesc
+            COALESCE(
+                col_description(table_oid(source_schema, source_table), attnum),
+                '') AS attdesc
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnum > 0
     LOOP
         EXECUTE
@@ -971,9 +933,7 @@ AS $$
                     pg_catalog.pg_class cls
                     LEFT JOIN pg_catalog.pg_tablespace spc
                         ON cls.reltablespace = spc.oid
-                WHERE cls.oid = CAST(
-                    quote_ident(current_schema) || '.' || quote_ident(source_table)
-                    AS regclass)
+                WHERE cls.oid = table_oid(current_schema, source_table)
             ), resolution));
 $$;
 
@@ -1059,7 +1019,7 @@ AS $$
 DECLARE
     r record;
 BEGIN
-    --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
+    PERFORM assert_table_exists(source_schema, source_table);
     EXECUTE
         'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
         || x_history_changes(source_schema, source_table);
@@ -1093,15 +1053,13 @@ BEGIN
     FOR r IN
         SELECT
             attname,
-            COALESCE(col_description(CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass), attnum), '') AS attdesc
+            COALESCE(
+                col_description(table_oid(source_schema, source_table), attnum),
+                '') AS attdesc
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
     LOOP
         EXECUTE
@@ -1207,7 +1165,7 @@ AS $$
 DECLARE
     r record;
 BEGIN
-    --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, source_table);
+    PERFORM assert_table_exists(source_schema, source_table);
     EXECUTE
         'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
         || x_history_snapshots(source_schema, source_table, resolution);
@@ -1237,15 +1195,13 @@ BEGIN
     FOR r IN
         SELECT
             attname,
-            COALESCE(col_description(CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass), attnum), '') AS attdesc
+            COALESCE(
+                col_description(table_oid(source_schema, source_table), attnum),
+                '') AS attdesc
         FROM
             pg_catalog.pg_attribute
         WHERE
-            attrelid = CAST(
-                quote_ident(source_schema) || '.' || quote_ident(source_table)
-                AS regclass)
+            attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
     LOOP
         EXECUTE
@@ -1346,17 +1302,17 @@ AS $$
 DECLARE
     r record;
 BEGIN
-    --CALL ASSERT_TABLE_EXISTS(SOURCE_SCHEMA, SOURCE_TABLE);
-    --CALL ASSERT_TABLE_EXISTS(DEST_SCHEMA, DEST_TABLE);
+    PERFORM assert_table_exists(source_schema, source_table);
+    PERFORM assert_table_exists(dest_schema, dest_table);
     -- Drop any existing triggers with the same name as the destination
     -- triggers in case there are any left over
     FOR r IN
         SELECT
-            'DROP TRIGGER ' || quote_ident(tgname) || ' ON ' || CAST(tgrelid AS regclass) AS drop_trig
+            'DROP TRIGGER ' || quote_ident(tgname) || ' ON ' || tgrelid::regclass AS drop_trig
         FROM
             pg_catalog.pg_trigger
         WHERE
-            tgrelid = CAST(quote_ident(source_schema) || '.' || quote_ident(source_table) AS regclass)
+            tgrelid = table_oid(source_schema, source_table)
             AND tgname IN (
                 source_table || '_keychg',
                 source_table || '_insert',
@@ -1370,7 +1326,7 @@ BEGIN
     -- trigger functions
     FOR r IN
         SELECT
-            'DROP FUNCTION ' || CAST(p.oid AS regprocedure) || ' CASCADE' AS drop_func
+            'DROP FUNCTION ' || p.oid::regprocedure || ' CASCADE' AS drop_func
         FROM
             pg_catalog.pg_proc p
             JOIN pg_catalog.pg_namespace n
@@ -1378,7 +1334,7 @@ BEGIN
         WHERE
             n.nspname = source_schema
             AND p.pronargs = 0
-            AND p.prorettype = CAST('trigger' AS regtype)
+            AND p.prorettype = 'trigger'::regtype
             AND p.proname IN (
                 source_table || '_keychg',
                 source_table || '_insert',
@@ -1399,7 +1355,7 @@ BEGIN
         ||     'RAISE EXCEPTION USING '
         ||         'ERRCODE = ' || quote_literal('UTH01') || ', '
         ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ', '
-        ||         'TABLE = ' || quote_literal(CAST(quote_ident(source_schema) || '.' || quote_ident(source_table) AS regclass)) || '; '
+        ||         'TABLE = ' || quote_literal(table_oid(source_schema, source_table)) || '; '
         ||     'RETURN NULL; '
         || 'END; '
         || '$func$';
@@ -1446,7 +1402,7 @@ BEGIN
         ||             'RAISE EXCEPTION USING '
         ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
         ||         'END IF; '
         ||         x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
         ||     'ELSE '
@@ -1455,7 +1411,7 @@ BEGIN
         ||             'RAISE EXCEPTION USING '
         ||                 'ERRCODE = ' || quote_literal('UTH03') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to update current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
         ||         'END IF; '
         ||     'END IF; '
         ||     'RETURN NEW; '
@@ -1487,7 +1443,7 @@ BEGIN
         ||             'RAISE EXCEPTION USING '
         ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
         ||         'END IF; '
         ||     'ELSE '
         ||         x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
@@ -1495,7 +1451,7 @@ BEGIN
         ||             'RAISE EXCEPTION USING '
         ||                 'ERRCODE = ' || quote_literal('UTH04') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to delete current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
+        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
         ||         'END IF; '
         ||     'END IF; '
         ||     'RETURN OLD; '
