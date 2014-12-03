@@ -43,15 +43,9 @@
 CREATE ROLE utils_history_user;
 CREATE ROLE utils_history_admin;
 
---GRANT utils_history_user TO utils_user;
+GRANT utils_history_user TO utils_user;
 GRANT utils_history_user TO utils_history_admin WITH ADMIN OPTION;
---GRANT utils_history_admin TO utils_admin WITH ADMIN OPTION;
-
--- SQLSTATES
--------------------------------------------------------------------------------
--- The following variables define the set of SQLSTATEs raised by the procedures
--- and functions in this module.
--------------------------------------------------------------------------------
+GRANT utils_history_admin TO utils_admin WITH ADMIN OPTION;
 
 -- x_history_periodlen(resolution)
 -- x_history_periodstep(resolution)
@@ -83,7 +77,7 @@ GRANT utils_history_user TO utils_history_admin WITH ADMIN OPTION;
 -- of input parameters.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION x_history_periodlen(resolution varchar(12))
+CREATE FUNCTION x_history_periodlen(resolution varchar(12))
     RETURNS interval
     LANGUAGE SQL
     IMMUTABLE
@@ -95,7 +89,7 @@ AS $$
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstep(resolution varchar(12))
+CREATE FUNCTION x_history_periodstep(resolution varchar(12))
     RETURNS interval
     LANGUAGE SQL
     IMMUTABLE
@@ -106,7 +100,7 @@ AS $$
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstep(source_schema name, source_table name)
+CREATE FUNCTION x_history_periodstep(source_schema name, source_table name)
     RETURNS interval
     LANGUAGE SQL
     STABLE
@@ -128,7 +122,7 @@ AS $$
     END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effname(resolution varchar(12))
+CREATE FUNCTION x_history_effname(resolution varchar(12))
     RETURNS name
     LANGUAGE SQL
     IMMUTABLE
@@ -136,7 +130,7 @@ AS $$
     VALUES (CAST('effective' AS name));
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effname(source_schema name, source_table name)
+CREATE FUNCTION x_history_effname(source_schema name, source_table name)
     RETURNS name
     LANGUAGE SQL
     STABLE
@@ -152,7 +146,7 @@ AS $$
         AND attnum = 1;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expname(resolution varchar(12))
+CREATE FUNCTION x_history_expname(resolution varchar(12))
     RETURNS name
     LANGUAGE SQL
     IMMUTABLE
@@ -160,7 +154,7 @@ AS $$
     VALUES (CAST('expiry' AS name));
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expname(source_schema name, source_table name)
+CREATE FUNCTION x_history_expname(source_schema name, source_table name)
     RETURNS name
     LANGUAGE SQL
     STABLE
@@ -176,7 +170,7 @@ AS $$
         AND attnum = 2;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effdefault(resolution varchar(12))
+CREATE FUNCTION x_history_effdefault(resolution varchar(12))
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -188,7 +182,7 @@ AS $$
         END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effdefault(source_schema name, source_table name)
+CREATE FUNCTION x_history_effdefault(source_schema name, source_table name)
     RETURNS text
     LANGUAGE SQL
     STABLE
@@ -207,7 +201,7 @@ AS $$
         AND a.attnum = 1;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expdefault(resolution varchar(12))
+CREATE FUNCTION x_history_expdefault(resolution varchar(12))
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -219,7 +213,7 @@ AS $$
         END);
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expdefault(source_schema name, source_table name)
+CREATE FUNCTION x_history_expdefault(source_schema name, source_table name)
     RETURNS text
     LANGUAGE SQL
     STABLE
@@ -238,7 +232,7 @@ AS $$
         AND a.attnum = 2;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodstart(resolution varchar(12), expression text)
+CREATE FUNCTION x_history_periodstart(resolution varchar(12), expression text)
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -248,7 +242,7 @@ AS $$
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_periodend(resolution varchar(12), expression text)
+CREATE FUNCTION x_history_periodend(resolution varchar(12), expression text)
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -260,7 +254,7 @@ AS $$
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_effnext(resolution varchar(12), shift interval)
+CREATE FUNCTION x_history_effnext(resolution varchar(12), shift interval)
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -275,7 +269,7 @@ AS $$
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expprior(resolution varchar(12), shift interval)
+CREATE FUNCTION x_history_expprior(resolution varchar(12), shift interval)
     RETURNS text
     LANGUAGE SQL
     IMMUTABLE
@@ -291,7 +285,7 @@ AS $$
     );
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_insert(
+CREATE FUNCTION x_history_insert(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -333,7 +327,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_expire(
+CREATE FUNCTION x_history_expire(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -374,7 +368,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_update(
+CREATE FUNCTION x_history_update(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -421,7 +415,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_delete(
+CREATE FUNCTION x_history_delete(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -461,7 +455,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_check(
+CREATE FUNCTION x_history_check(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -507,7 +501,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_changes(
+CREATE FUNCTION x_history_changes(
     source_schema name,
     source_table name
 )
@@ -583,7 +577,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_snapshots(
+CREATE FUNCTION x_history_snapshots(
     source_schema name,
     source_table name,
     resolution varchar(12)
@@ -628,7 +622,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_update_fields(
+CREATE FUNCTION x_history_update_fields(
     source_schema name,
     source_table name,
     key_fields BOOLEAN
@@ -666,7 +660,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION x_history_update_when(
+CREATE FUNCTION x_history_update_when(
     source_schema name,
     source_table name,
     key_fields BOOLEAN
@@ -745,7 +739,7 @@ $$;
 -- important to you, make sure you back it up before executing this procedure.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION create_history_table(
+CREATE FUNCTION create_history_table(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -944,7 +938,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_table(
+CREATE FUNCTION create_history_table(
     source_table name,
     dest_table name,
     dest_tbspace name,
@@ -959,7 +953,7 @@ AS $$
             current_schema, source_table, current_schema, dest_table, dest_tbspace, resolution));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_table(
+CREATE FUNCTION create_history_table(
     source_table name,
     dest_table name,
     resolution varchar(12)
@@ -983,7 +977,7 @@ AS $$
             ), resolution));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_table(
+CREATE FUNCTION create_history_table(
     source_table name,
     resolution varchar(12)
 )
@@ -1052,7 +1046,7 @@ COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, varchar)
 -- deletion.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION create_history_changes(
+CREATE FUNCTION create_history_changes(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -1122,7 +1116,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_changes(
+CREATE FUNCTION create_history_changes(
     source_table name,
     dest_view name
 )
@@ -1136,7 +1130,7 @@ AS $$
         ));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_changes(
+CREATE FUNCTION create_history_changes(
     source_table name
 )
     RETURNS void
@@ -1199,7 +1193,7 @@ COMMENT ON FUNCTION create_history_changes(name)
 -- copied to the destination table.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION create_history_snapshots(
+CREATE FUNCTION create_history_snapshots(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -1262,7 +1256,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_snapshots(
+CREATE FUNCTION create_history_snapshots(
     source_table name,
     dest_view name,
     resolution varchar(12)
@@ -1277,7 +1271,7 @@ AS $$
     ));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_snapshots(
+CREATE FUNCTION create_history_snapshots(
     source_table name,
     resolution varchar(12)
 )
@@ -1337,7 +1331,7 @@ COMMENT ON FUNCTION create_history_snapshots(name, varchar)
 -- '7 DAYS'" to cause the effective dates to be accurate.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION create_history_triggers(
+CREATE FUNCTION create_history_triggers(
     source_schema name,
     source_table name,
     dest_schema name,
@@ -1403,6 +1397,7 @@ BEGIN
         || 'AS $func$ '
         || 'BEGIN '
         ||     'RAISE EXCEPTION USING '
+        ||         'ERRCODE = ' || quote_literal('UTH01') || ', '
         ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ', '
         ||         'TABLE = ' || quote_literal(CAST(quote_ident(source_schema) || '.' || quote_ident(source_table) AS regclass)) || '; '
         ||     'RETURN NULL; '
@@ -1449,6 +1444,7 @@ BEGIN
         ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
         ||         'IF NOT found THEN '
         ||             'RAISE EXCEPTION USING '
+        ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
         ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
         ||         'END IF; '
@@ -1457,6 +1453,7 @@ BEGIN
         ||         x_history_update(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
         ||         'IF NOT found THEN '
         ||             'RAISE EXCEPTION USING '
+        ||                 'ERRCODE = ' || quote_literal('UTH03') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to update current history row') || ', '
         ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
         ||         'END IF; '
@@ -1488,6 +1485,7 @@ BEGIN
         ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
         ||         'IF NOT found THEN '
         ||             'RAISE EXCEPTION USING '
+        ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
         ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
         ||         'END IF; '
@@ -1495,6 +1493,7 @@ BEGIN
         ||         x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
         ||         'IF NOT found THEN '
         ||             'RAISE EXCEPTION USING '
+        ||                 'ERRCODE = ' || quote_literal('UTH04') || ', '
         ||                 'MESSAGE = ' || quote_literal('Failed to delete current history row') || ', '
         ||                 'TABLE = ' || quote_literal(CAST(quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS regclass)) || '; '
         ||         'END IF; '
@@ -1510,7 +1509,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_triggers(
+CREATE FUNCTION create_history_triggers(
     source_table name,
     dest_table name,
     resolution varchar(12),
@@ -1526,7 +1525,7 @@ AS $$
         ));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_triggers(
+CREATE FUNCTION create_history_triggers(
     source_table name,
     resolution varchar(12),
     shift interval
@@ -1541,7 +1540,7 @@ AS $$
         ));
 $$;
 
-CREATE OR REPLACE FUNCTION create_history_triggers(
+CREATE FUNCTION create_history_triggers(
     source_table name,
     resolution varchar(12)
 )
