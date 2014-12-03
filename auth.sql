@@ -43,23 +43,9 @@
 CREATE ROLE utils_auth_user;
 CREATE ROLE utils_auth_admin;
 
---GRANT utils_auth_user TO utils_user;
+GRANT utils_auth_user TO utils_user;
 GRANT utils_auth_user TO utils_auth_admin WITH ADMIN OPTION;
---GRANT utils_auth_admin TO utils_admin WITH ADMIN OPTION;
-
--- SQLSTATES
--------------------------------------------------------------------------------
--- The following variables define the set of SQLSTATEs raised by the procedures
--- and functions in this module.
--------------------------------------------------------------------------------
-
---CREATE VARIABLE AUTH_AMBIGUOUS_STATE CHAR(5) CONSTANT '90002';
---
---GRANT READ ON VARIABLE AUTH_AMBIGUOUS_STATE TO ROLE UTILS_AUTH_USER;
---GRANT ALL ON VARIABLE AUTH_AMBIGUOUS_STATE TO ROLE UTILS_AUTH_ADMIN WITH GRANT OPTION;
---
---COMMENT ON VARIABLE AUTH_AMBIGUOUS_STATE
---    IS 'The SQLSTATE raised when an authentication type is ambiguous (e.g. refers to both a user & group)';
+GRANT utils_auth_admin TO utils_admin WITH ADMIN OPTION;
 
 -- auths_held(auth_name)
 -------------------------------------------------------------------------------
@@ -71,7 +57,7 @@ GRANT utils_auth_user TO utils_auth_admin WITH ADMIN OPTION;
 -- statements.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION auths_held(
+CREATE FUNCTION auths_held(
     auth_name name
 )
     RETURNS TABLE (
@@ -146,7 +132,7 @@ COMMENT ON FUNCTION auths_held(name)
 -- the same level of access as source.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION auth_diff(
+CREATE FUNCTION auth_diff(
     source name,
     dest name
 )
@@ -194,7 +180,7 @@ AS $$
                 ON ua.object_type = da.object_type
                 AND ua.object_id = da.object_id
                 AND ua.auth = da.auth
-        WHERE sa.auth <> '' AND da.auth = ''
+        WHERE sa.suffix <> '' AND da.suffix = ''
     )
     SELECT * FROM missing_diff UNION
     SELECT * FROM upgrade_diff;
@@ -222,7 +208,7 @@ COMMENT ON FUNCTION auth_diff(name, name)
 -- copied.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION x_copy_list(
+CREATE FUNCTION x_copy_list(
     source name,
     dest name
 )
@@ -247,7 +233,7 @@ AS $$
         auth_diff(source, dest);
 $$;
 
-CREATE OR REPLACE FUNCTION copy_auth(
+CREATE FUNCTION copy_auth(
     source name,
     dest name
 )
@@ -287,7 +273,7 @@ COMMENT ON FUNCTION copy_auth(name, name)
 -- Any such authorziations must be handled manually.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION x_remove_list(
+CREATE FUNCTION x_remove_list(
     auth_name name
 )
     RETURNS TABLE (
@@ -315,7 +301,7 @@ AS $$
         NOT (object_type = '' AND auth = auth_name);
 $$;
 
-CREATE OR REPLACE FUNCTION remove_auth(
+CREATE FUNCTION remove_auth(
     auth_name name
 )
     RETURNS void
@@ -357,7 +343,7 @@ COMMENT ON FUNCTION remove_auth(name)
 -- remove_auth. These should be handled separately.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION move_auth(
+CREATE FUNCTION move_auth(
     source name,
     dest name
 )
@@ -421,7 +407,7 @@ COMMENT ON TABLE saved_auths
 -- procedures.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION save_auth(aschema name, atable name)
+CREATE FUNCTION save_auth(aschema name, atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
@@ -475,7 +461,7 @@ AS $$
         );
 $$;
 
-CREATE OR REPLACE FUNCTION save_auth(atable name)
+CREATE FUNCTION save_auth(atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
@@ -512,7 +498,7 @@ COMMENT ON FUNCTION save_auth(name)
 -- authorizations are NOT saved and restored by these procedures.
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION restore_auth(aschema name, atable name)
+CREATE FUNCTION restore_auth(aschema name, atable name)
     RETURNS void
     LANGUAGE plpgsql
     VOLATILE
@@ -542,7 +528,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION restore_auth(atable name)
+CREATE FUNCTION restore_auth(atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
