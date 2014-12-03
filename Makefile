@@ -4,7 +4,7 @@ SCHEMANAME:=utils
 VERSION:=0.1
 ALL_EXT:=
 ALL_TESTS:=$(wildcard tests/*.sql)
-ALL_SQL:=$(filter-out install.sql uninstall.sql,$(wildcard *.sql))
+ALL_SQL:=assert.sql auth.sql history.sql utils.sql
 ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
 
 install: install.sql
@@ -37,6 +37,8 @@ install.sql: $(ALL_FOO)
 	echo "\c $(DBNAME)" > $@
 	echo "BEGIN;" >> $@
 	cat foo >> $@
+	echo "REVOKE ALL ON ALL TABLES IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
+	echo "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
 	echo "COMMIT;" >> $@
 	rm foo
 	rm -f *.foo
