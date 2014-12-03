@@ -3,7 +3,6 @@ SCHEMANAME:=utils
 
 VERSION:=0.1
 ALL_EXT:=
-ALL_TESTS:=$(wildcard tests/*.sql)
 ALL_SQL:=assert.sql auth.sql history.sql utils.sql
 ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
 
@@ -21,10 +20,9 @@ test:
 
 clean: $(SUBDIRS)
 	#$(MAKE) -C docs clean
-	#$(MAKE) -C tests clean
+	$(MAKE) -C tests clean
 	rm -f foo
 	rm -f *.foo
-	rm -f utils.sql
 	rm -f install.sql
 	rm -f uninstall.sql
 	rm -fr build/ dist/
@@ -59,3 +57,4 @@ auth.foo: utils.foo
 history.foo: utils.foo auth.foo assert.foo
 
 .PHONY: install uninstall doc clean test
+
