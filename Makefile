@@ -29,16 +29,12 @@ clean: $(SUBDIRS)
 	rm -f uninstall.sql
 	rm -fr build/ dist/
 
-utils.sql: utils.sqt Makefile
-	sed -e 's/%SCHEMANAME%/$(SCHEMANAME)/' $< > $@
-
 %.foo: %.sql
-	cat $< >> foo
+	sed -e 's/%SCHEMANAME%/$(SCHEMANAME)/' $< >> foo
 	touch $@
 
 install.sql: $(ALL_FOO)
 	echo "\c $(DBNAME)" > $@
-	echo "SET search_path TO $(SCHEMANAME), public;" >> $@
 	echo "BEGIN;" >> $@
 	cat foo >> $@
 	echo "COMMIT;" >> $@
@@ -50,7 +46,7 @@ uninstall.sql: install.sql
 	echo "SET search_path TO $(SCHEMANAME), public;" >> $@
 	awk -f uninstall.awk $< >> $@
 
-#assert.foo: utils.foo sql.foo
+assert.foo: utils.foo
 
 #date_time.foo: utils.foo assert.foo
 
@@ -60,7 +56,6 @@ auth.foo: utils.foo
 
 #merge.foo: utils.foo assert.foo sql.foo
 
-history.foo: utils.foo auth.foo
-#history.foo: utils.foo auth.foo assert.foo
+history.foo: utils.foo auth.foo assert.foo
 
 .PHONY: install uninstall doc clean test
