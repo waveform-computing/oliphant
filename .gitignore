@@ -1,0 +1,17 @@
+*.vim
+*.swp
+tags
+
+# Make targets
+*.foo
+foo
+install.sql
+uninstall.sql
+utils.sql
+tests/test.sql
+
+# Packages
+dist
+build
+docs/_build
+
