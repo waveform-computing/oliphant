@@ -43,3 +43,14 @@ AS $$
     VALUES ((quote_ident(aschema) || '.' || quote_ident(atable))::regclass);
 $$;
 
+CREATE FUNCTION function_oid(aschema name, afunction name, argtypes name[])
+    RETURNS regprocedure
+    LANGUAGE SQL
+    STABLE
+AS $$
+    -- XXX This assumes that unnest returns elements from the array in order...
+    SELECT
+        (quote_ident(aschema) || '.' || quote_ident(afunction) || '(' || string_agg(t.n, ',') || ')')::regprocedure
+    FROM
+        unnest(argtypes) AS t(n);
+$$;
