@@ -867,8 +867,8 @@ BEGIN
     WHERE
         table_schema = source_schema
         AND table_name = source_table;
-    DELETE FROM saved_auths WHERE
-        privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE');
+    --DELETE FROM saved_auths WHERE
+    --    privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE');
     PERFORM restore_auth(dest_schema, dest_table);
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
