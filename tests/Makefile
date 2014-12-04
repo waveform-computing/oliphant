@@ -1,4 +1,4 @@
-ALL_TESTS:=test_assert.sql test_auth.sql
+ALL_TESTS:=test_assert.sql test_auth.sql test_history.sql
 
 test: test.sql
 	psql -d $(DBNAME) -f $<
