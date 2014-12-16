@@ -82,9 +82,9 @@ SELECT auto_insert('baz', 'emp');
 VALUES (assert_equals((
     SELECT count(*)
     FROM (
-        SELECT * FROM baz
+        SELECT country, id, givenname, surname FROM baz
         INTERSECT
-        SELECT * FROM emp
+        SELECT country, id, givenname, surname FROM emp
     ) AS t), 4::bigint));
 
 INSERT INTO baz VALUES
@@ -95,9 +95,9 @@ SELECT auto_merge('baz', 'emp');
 VALUES (assert_equals((
     SELECT count(*)
     FROM (
-        SELECT * FROM baz
+        SELECT country, id, givenname, surname FROM baz
         INTERSECT
-        SELECT * FROM emp
+        SELECT country, id, givenname, surname FROM emp
     ) AS t), 6::bigint));
 
 DROP TABLE foo;
