@@ -22,15 +22,8 @@
 -- IN THE SOFTWARE.
 -------------------------------------------------------------------------------
 -- The following routines aid in manipulating authorizations en masse in the
--- database. The allow all authorizations associated with a given user, group
--- or role to be transferred to other users, groups, or roles, removed
--- entirely, or queried as a whole.
---
--- In each routine, grantees are identified by two parameters, AUTH_NAME which
--- holds the name of the grantee and AUTH_TYPE which holds the type of the
--- grantee where U=User, G=Group, and R=Role. Typically the AUTH_TYPE parameter
--- can be omitted in which case the type will be determined automatically if
--- possible.
+-- database. The allow all authorizations associated with a given role to be
+-- transferred to other roles, removed entirely, or queried as a whole.
 -------------------------------------------------------------------------------
 
 -- ROLES
