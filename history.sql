@@ -570,7 +570,7 @@ DECLARE
 BEGIN
     select_stmt :=
         'WITH RECURSIVE range(at) AS ('
-        || '    SELECT min(' || quote_ident(x_history_effname(source_schema, source_table)) || ')'
+        || '    SELECT min(' || quote_ident(x_history_effname(source_schema, source_table)) || ')::timestamp'
         || '    FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table)
         || '    UNION ALL'
         || '    SELECT at + interval ' || quote_literal(x_history_periodlen(resolution))
