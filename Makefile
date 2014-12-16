@@ -3,14 +3,14 @@ SCHEMANAME:=utils
 
 VERSION:=0.1
 ALL_EXT:=
-ALL_SQL:=assert.sql auth.sql history.sql utils.sql
+ALL_SQL:=assert.sql auth.sql history.sql utils.sql merge.sql
 ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
 
 install: install.sql
 	psql -1 -d $(DBNAME) -f $<
 
 uninstall: uninstall.sql
-	psql -1 -d $(DBNAME) -f $<
+	psql -d $(DBNAME) -f $<
 
 doc:
 	$(MAKE) -C docs html
@@ -52,7 +52,7 @@ assert.foo: utils.foo
 
 auth.foo: utils.foo
 
-#merge.foo: utils.foo assert.foo sql.foo
+merge.foo: utils.foo assert.foo
 
 history.foo: utils.foo auth.foo assert.foo
 
