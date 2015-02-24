@@ -304,6 +304,7 @@ BEGIN
         WHERE
             attrelid = table_oid(source_schema, source_table)
             AND attnum > 0
+            AND NOT attisdropped
         ORDER BY attnum
     LOOP
         insert_stmt := insert_stmt || ',' || quote_ident(r.attname);
@@ -344,6 +345,7 @@ BEGIN
         WHERE
             att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
@@ -384,6 +386,7 @@ BEGIN
         WHERE
             att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND con.contype = 'p'
     LOOP
         IF r.iskey THEN
@@ -427,6 +430,7 @@ BEGIN
         WHERE
             att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
@@ -471,6 +475,7 @@ BEGIN
         WHERE
             att.attrelid = table_oid(source_schema, source_table)
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
@@ -515,6 +520,7 @@ BEGIN
             att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 2
+            AND NOT att.attisdropped
     LOOP
         select_stmt := select_stmt
             || ', old.' || quote_ident(r.attname) || ' AS ' || quote_ident('old_' || r.attname)
@@ -586,6 +592,7 @@ BEGIN
         WHERE
             attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
+            AND NOT attisdropped
         ORDER BY attnum
     LOOP
         select_stmt := select_stmt
@@ -622,6 +629,7 @@ BEGIN
             att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND (
                 (key_fields AND ARRAY [att.attnum] <@ con.conkey) OR
                 NOT (key_fields OR ARRAY [att.attnum] <@ con.conkey)
@@ -657,6 +665,7 @@ BEGIN
             att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
+            AND NOT att.attisdropped
             AND (
                 (key_fields AND ARRAY [att.attnum] <@ con.conkey) OR
                 NOT (key_fields OR ARRAY [att.attnum] <@ con.conkey)
@@ -774,6 +783,7 @@ BEGIN
             att.attrelid = table_oid(source_schema, source_table)
             AND con.contype = 'p'
             AND att.attnum > 0
+            AND NOT att.attisdropped
         ORDER BY sub.i
     LOOP
         key_cols := key_cols
@@ -802,6 +812,7 @@ BEGIN
             attrelid = table_oid(source_schema, source_table)
             AND attnotnull
             AND attnum > 0
+            AND NOT attisdropped
     LOOP
         EXECUTE
             'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
@@ -892,6 +903,7 @@ BEGIN
         WHERE
             attrelid = table_oid(source_schema, source_table)
             AND attnum > 0
+            AND NOT attisdropped
     LOOP
         EXECUTE
             'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(r.attname)
@@ -1061,6 +1073,7 @@ BEGIN
         WHERE
             attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
+            AND NOT attisdropped
     LOOP
         EXECUTE
             'COMMENT ON COLUMN '
@@ -1203,6 +1216,7 @@ BEGIN
         WHERE
             attrelid = table_oid(source_schema, source_table)
             AND attnum > 2
+            AND NOT attisdropped
     LOOP
         EXECUTE
             'COMMENT ON COLUMN '
