@@ -32,6 +32,8 @@
 -- created by this module.
 -------------------------------------------------------------------------------
 
+DROP ROLE IF EXISTS utils_auth_user;
+DROP ROLE IF EXISTS utils_auth_admin;
 CREATE ROLE utils_auth_user;
 CREATE ROLE utils_auth_admin;
 

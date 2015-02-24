@@ -28,6 +28,8 @@
 -- created by this module.
 -------------------------------------------------------------------------------
 
+DROP ROLE IF EXISTS utils_assert_user;
+DROP ROLE IF EXISTS utils_assert_admin;
 CREATE ROLE utils_assert_user;
 CREATE ROLE utils_assert_admin;
 

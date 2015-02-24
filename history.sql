@@ -40,6 +40,8 @@
 -- created by this module.
 -------------------------------------------------------------------------------
 
+DROP ROLE IF EXISTS utils_history_user;
+DROP ROLE IF EXISTS utils_history_admin;
 CREATE ROLE utils_history_user;
 CREATE ROLE utils_history_admin;
 

@@ -32,6 +32,8 @@
 -- created by this module.
 -------------------------------------------------------------------------------
 
+DROP ROLE IF EXISTS utils_merge_user;
+DROP ROLE IF EXISTS utils_merge_admin;
 CREATE ROLE utils_merge_user;
 CREATE ROLE utils_merge_admin;
 

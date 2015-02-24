@@ -29,6 +29,8 @@ CREATE SCHEMA %SCHEMANAME%;
 
 SET search_path TO %SCHEMANAME%;
 
+DROP ROLE IF EXISTS utils_user;
+DROP ROLE IF EXISTS utils_admin;
 CREATE ROLE utils_user;
 CREATE ROLE utils_admin;
 
