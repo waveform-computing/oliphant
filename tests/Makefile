@@ -1,7 +1,7 @@
 ALL_TESTS:=test_assert.sql test_auth.sql test_history.sql test_merge.sql
 
 test: test.sql
-	psql -d $(DBNAME) -f $<
+	psql -d $(DBNAME) -e -v ON_ERROR_STOP=1 -f $<
 
 clean:
 	rm -f test.sql

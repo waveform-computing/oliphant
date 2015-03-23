@@ -230,7 +230,7 @@ CREATE FUNCTION x_history_periodstart(resolution varchar(12), expression text)
     IMMUTABLE
 AS $$
     VALUES (
-        'date_trunc(' || quote_literal(resolution) || ', ' || expression || ')'
+        format('date_trunc(%L, %s)', resolution, expression)
     );
 $$;
 
@@ -240,9 +240,11 @@ CREATE FUNCTION x_history_periodend(resolution varchar(12), expression text)
     IMMUTABLE
 AS $$
     VALUES (
-        'date_trunc(' || quote_literal(resolution) || ', ' || expression || ') + '
-        || 'interval ' || quote_literal(x_history_periodlen(resolution)) || ' - '
-        || 'interval ' || quote_literal(x_history_periodstep(resolution))
+        format('date_trunc(%L, %s) + interval %L - interval %L',
+            resolution, expression,
+            x_history_periodlen(resolution),
+            x_history_periodstep(resolution)
+        )
     );
 $$;
 
@@ -255,7 +257,7 @@ AS $$
         x_history_periodstart(
             resolution, x_history_effdefault(resolution)
             || CASE WHEN shift IS NOT NULL
-                THEN ' + interval ' || quote_literal(shift)
+                THEN format(' + interval %L', shift)
                 ELSE ''
             END)
     );
@@ -269,9 +271,9 @@ AS $$
     VALUES (
         x_history_periodend(
             resolution, x_history_effdefault(resolution)
-            || ' - interval ' || quote_literal(x_history_periodlen(resolution))
+            || format(' - interval %L', x_history_periodlen(resolution))
             || CASE WHEN shift IS NOT NULL
-                THEN ' + interval ' || quote_literal(shift)
+                THEN format(' + interval %L', shift)
                 ELSE ''
             END)
     );
@@ -294,10 +296,6 @@ DECLARE
     values_stmt text DEFAULT '';
     r record;
 BEGIN
-    insert_stmt := 'INSERT INTO ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '(';
-    values_stmt = ' VALUES (';
-    insert_stmt := insert_stmt || quote_ident(x_history_effname(dest_schema, dest_table));
-    values_stmt := values_stmt || x_history_effnext(resolution, shift);
     FOR r IN
         SELECT
             attname
@@ -309,12 +307,21 @@ BEGIN
             AND NOT attisdropped
         ORDER BY attnum
     LOOP
-        insert_stmt := insert_stmt || ',' || quote_ident(r.attname);
-        values_stmt := values_stmt || ',NEW.' || quote_ident(r.attname);
+        insert_stmt := insert_stmt || format(', %I', r.attname);
+        values_stmt := values_stmt || format(', new.%I', r.attname);
     END LOOP;
-    insert_stmt := insert_stmt || ')';
-    values_stmt := values_stmt || ')';
-    RETURN insert_stmt || values_stmt;
+
+    RETURN format(
+        $sql$
+        INSERT INTO %I.%I (%I%s) VALUES (%s%s)
+        $sql$,
+
+        dest_schema, dest_table,
+        x_history_effname(dest_schema, dest_table),
+        insert_stmt,
+        x_history_effnext(resolution, shift),
+        values_stmt
+    );
 END;
 $$;
 
@@ -334,9 +341,6 @@ DECLARE
     update_stmt text DEFAULT '';
     r record;
 BEGIN
-    update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-        || ' SET '   || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expprior(resolution, shift)
-        || ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
         SELECT
             att.attname
@@ -351,10 +355,23 @@ BEGIN
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
-        update_stmt := update_stmt
-            || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+        update_stmt := update_stmt || format(' AND %I = old.%I', r.attname, r.attname);
     END LOOP;
-    RETURN update_stmt;
+
+    RETURN format(
+        $sql$
+        UPDATE %I.%I SET %I = %s
+        WHERE %I = %s
+        %s
+        $sql$,
+
+        dest_schema, dest_table,
+        x_history_expname(dest_schema, dest_table),
+        x_history_expprior(resolution, shift),
+        x_history_expname(dest_schema, dest_table),
+        x_history_expdefault(resolution),
+        update_stmt
+    );
 END;
 $$;
 
@@ -370,13 +387,10 @@ CREATE FUNCTION x_history_update(
     STABLE
 AS $$
 DECLARE
-    update_stmt text DEFAULT '';
     set_stmt text DEFAULT '';
     where_stmt text DEFAULT '';
     r record;
 BEGIN
-    update_stmt := 'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
-    where_stmt := ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
         SELECT
             att.attname,
@@ -392,15 +406,25 @@ BEGIN
             AND con.contype = 'p'
     LOOP
         IF r.iskey THEN
-            where_stmt := where_stmt
-                || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+            where_stmt := where_stmt || format(' AND %I = old.%I', r.attname, r.attname);
         ELSE
-            set_stmt := set_stmt
-                || ', ' || quote_ident(r.attname) || ' = NEW.' || quote_ident(r.attname);
+            set_stmt := set_stmt || format(', %I = new.%I', r.attname, r.attname);
         END IF;
     END LOOP;
-    set_stmt = 'SET' || substring(set_stmt from 2);
-    RETURN update_stmt || set_stmt || where_stmt;
+
+    RETURN format(
+        $sql$
+        UPDATE %I.%I SET %s
+        WHERE %I = %s
+        %s
+        $sql$,
+
+        dest_schema, dest_table,
+        substring(set_stmt from 2),
+        x_history_expname(dest_schema, dest_table),
+        x_history_expdefault(resolution),
+        where_stmt
+    );
 END;
 $$;
 
@@ -416,12 +440,9 @@ CREATE FUNCTION x_history_delete(
     STABLE
 AS $$
 DECLARE
-    delete_stmt text DEFAULT '';
     where_stmt text DEFAULT '';
     r record;
 BEGIN
-    delete_stmt = 'DELETE FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table);
-    where_stmt = ' WHERE ' || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
         SELECT
             att.attname
@@ -436,10 +457,21 @@ BEGIN
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
-        where_stmt := where_stmt
-            || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+        where_stmt := where_stmt || format(' AND %I = old.%I', r.attname, r.attname);
     END LOOP;
-    RETURN delete_stmt || where_stmt;
+
+    RETURN format(
+        $sql$
+        DELETE FROM %I.%I
+        WHERE %I = %s
+        %s
+        $sql$,
+
+        dest_schema, dest_table,
+        x_history_expname(dest_schema, dest_table),
+        x_history_expdefault(resolution),
+        where_stmt
+    );
 END;
 $$;
 
@@ -455,18 +487,9 @@ CREATE FUNCTION x_history_check(
     STABLE
 AS $$
 DECLARE
-    select_stmt text DEFAULT '';
     where_stmt text DEFAULT '';
     r record;
 BEGIN
-    select_stmt :=
-        'SELECT '
-        || x_history_periodend(resolution, x_history_effname(dest_schema, dest_table)) || ' '
-        || 'FROM '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' ';
-    where_stmt :=
-        'WHERE '
-        || quote_ident(x_history_expname(dest_schema, dest_table)) || ' = ' || x_history_expdefault(resolution);
     FOR r IN
         SELECT
             att.attname
@@ -481,10 +504,23 @@ BEGIN
             AND con.contype = 'p'
             AND ARRAY [att.attnum] <@ con.conkey
     LOOP
-        where_stmt := where_stmt
-            || ' AND ' || quote_ident(r.attname) || ' = OLD.' || quote_ident(r.attname);
+        where_stmt := where_stmt || format(' AND %I = old.%I', r.attname, r.attname);
     END LOOP;
-    RETURN select_stmt || where_stmt;
+
+    RETURN format(
+        $sql$
+        SELECT %s
+        FROM %I.%I
+        WHERE %I = %s
+        %s
+        $sql$,
+
+        x_history_periodend(resolution, x_history_effname(dest_schema, dest_table)),
+        dest_schema, dest_table,
+        x_history_expname(dest_schema, dest_table),
+        x_history_expdefault(resolution),
+        where_stmt
+    );
 END;
 $$;
 
@@ -504,12 +540,6 @@ DECLARE
     delete_test text DEFAULT '';
     r record;
 BEGIN
-    from_stmt :=
-        ' FROM ' || quote_ident('old_' || source_table) || ' AS old'
-        || ' FULL JOIN ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS new'
-        || ' ON new.' || x_history_effname(source_schema, source_table) || ' - interval ' || quote_literal(x_history_periodstep(source_schema, source_table))
-        || ' BETWEEN old.' || x_history_effname(source_schema, source_table)
-        || ' AND old.' || x_history_expname(source_schema, source_table);
     FOR r IN
         SELECT
             att.attname,
@@ -525,41 +555,61 @@ BEGIN
             AND NOT att.attisdropped
     LOOP
         select_stmt := select_stmt
-            || ', old.' || quote_ident(r.attname) || ' AS ' || quote_ident('old_' || r.attname)
-            || ', new.' || quote_ident(r.attname) || ' AS ' || quote_ident('new_' || r.attname);
+            || format(', old.%I AS %I', r.attname, 'old_' || r.attname)
+            || format(', new.%I AS %I', r.attname, 'new_' || r.attname);
         IF r.iskey THEN
             from_stmt := from_stmt
-                || ' AND old.' || quote_ident(r.attname) || ' = new.' || quote_ident(r.attname);
+                || format(' AND old.%I = new.%I', r.attname, r.attname);
             insert_test := insert_test
-                || 'AND old.' || quote_ident(r.attname) || ' IS NULL '
-                || 'AND new.' || quote_ident(r.attname) || ' IS NOT NULL ';
+                || format('AND old.%I IS NULL AND new.%I IS NOT NULL ', r.attname, r.attname);
             update_test := update_test
-                || 'AND old.' || quote_ident(r.attname) || ' IS NOT NULL '
-                || 'AND new.' || quote_ident(r.attname) || ' IS NOT NULL ';
+                || format('AND old.%I IS NOT NULL AND new.%I IS NOT NULL ', r.attname, r.attname);
             delete_test := delete_test
-                || 'AND old.' || quote_ident(r.attname) || ' IS NOT NULL '
-                || 'AND new.' || quote_ident(r.attname) || ' IS NULL ';
+                || format('AND old.%I IS NOT NULL AND new.%I IS NULL ', r.attname, r.attname);
         END IF;
     END LOOP;
-    select_stmt :=
-        'SELECT'
-        || ' coalesce(new.'
-            || quote_ident(x_history_effname(source_schema, source_table)) || ', old.'
-            || quote_ident(x_history_expname(source_schema, source_table)) || ' + interval ' || quote_literal(x_history_periodstep(source_schema, source_table)) || ') AS changed'
-        || ', CAST(CASE '
-            || 'WHEN' || substring(insert_test from 4) || 'THEN ''INSERT'' '
-            || 'WHEN' || substring(update_test from 4) || 'THEN ''UPDATE'' '
-            || 'WHEN' || substring(delete_test from 4) || 'THEN ''DELETE'' '
-            || 'ELSE ''ERROR'' END AS char(6)) AS change'
-        || select_stmt;
-    RETURN
-        'WITH ' || quote_ident('old_' || source_table) || ' AS ('
-        || '    SELECT *'
-        || '    FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table)
-        || '    WHERE ' || x_history_expname(source_schema, source_table) || ' < ' || x_history_expdefault(source_schema, source_table)
-        || ') '
-        || select_stmt
-        || from_stmt;
+
+    RETURN format(
+        $sql$
+        WITH %I AS (
+            SELECT *
+            FROM %I.%I
+            WHERE %I < %s
+        )
+        SELECT
+            coalesce(new.%I, old.%I + interval %L) AS changed,
+            CAST(CASE
+                WHEN %s THEN 'INSERT'
+                WHEN %s THEN 'UPDATE'
+                WHEN %s THEN 'DELETE'
+                ELSE 'ERROR'
+            END AS char(6)) AS change
+            %s
+        FROM
+            %I AS old FULL JOIN %I.%I AS new
+            ON new.%I - interval %L BETWEEN old.%I AND old.%I
+            %s
+        $sql$,
+
+        'old_' || source_table,
+        source_schema, source_table,
+        x_history_expname(source_schema, source_table),
+        x_history_expdefault(source_schema, source_table),
+        x_history_effname(source_schema, source_table),
+        x_history_expname(source_schema, source_table),
+        x_history_periodstep(source_schema, source_table),
+        substring(insert_test from 4),
+        substring(update_test from 4),
+        substring(delete_test from 4),
+        select_stmt,
+        'old_' || source_table,
+        source_schema, source_table,
+        x_history_effname(source_schema, source_table),
+        x_history_periodstep(source_schema, source_table),
+        x_history_effname(source_schema, source_table),
+        x_history_expname(source_schema, source_table),
+        from_stmt
+    );
 END;
 $$;
 
@@ -576,16 +626,6 @@ DECLARE
     select_stmt text DEFAULT '';
     r record;
 BEGIN
-    select_stmt :=
-        'WITH RECURSIVE range(at) AS ('
-        || '    SELECT min(' || quote_ident(x_history_effname(source_schema, source_table)) || ')::timestamp'
-        || '    FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table)
-        || '    UNION ALL'
-        || '    SELECT at + interval ' || quote_literal(x_history_periodlen(resolution))
-        || '    FROM range'
-        || '    WHERE at <= ' || x_history_effdefault(resolution)
-        || ') '
-        || 'SELECT ' || x_history_periodend(resolution, 'r.at') || ' AS snapshot';
     FOR r IN
         SELECT
             attname
@@ -597,20 +637,44 @@ BEGIN
             AND NOT attisdropped
         ORDER BY attnum
     LOOP
-        select_stmt := select_stmt
-            || ', h.' || quote_ident(r.attname);
+        select_stmt := select_stmt || format(', h.%I', r.attname);
     END LOOP;
-    RETURN select_stmt
-        || ' FROM range r JOIN ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' H'
-        || ' ON r.at BETWEEN h.' || quote_ident(x_history_effname(source_schema, source_table))
-        || ' AND h.' || quote_ident(x_history_expname(source_schema, source_table));
+
+    RETURN format(
+        $sql$
+        WITH RECURSIVE range(at) AS (
+            SELECT min(%I)::timestamp
+            FROM %I.%I
+            UNION ALL
+            SELECT at + interval %L
+            FROM range
+            WHERE at <= %s
+        )
+        SELECT
+            %s AS snapshot
+            %s
+        FROM
+            range AS r JOIN %I.%I AS h
+            ON r.at BETWEEN h.%I AND h.%I
+        $sql$,
+
+        x_history_effname(source_schema, source_table),
+        source_schema, source_table,
+        x_history_periodlen(resolution),
+        x_history_effdefault(resolution),
+        x_history_periodend(resolution, 'r.at'),
+        select_stmt,
+        source_schema, source_table,
+        x_history_effname(source_schema, source_table),
+        x_history_expname(source_schema, source_table)
+    );
 END;
 $$;
 
 CREATE FUNCTION x_history_update_fields(
     source_schema name,
     source_table name,
-    key_fields BOOLEAN
+    key_fields boolean
 )
     RETURNS text
     LANGUAGE plpgsql
@@ -638,8 +702,9 @@ BEGIN
             )
         ORDER BY att.attnum
     LOOP
-        result := result || ',' || quote_ident(r.attname);
+        result := result || format(',%I', r.attname);
     END LOOP;
+
     RETURN substring(result from 2);
 END;
 $$;
@@ -647,7 +712,7 @@ $$;
 CREATE FUNCTION x_history_update_when(
     source_schema name,
     source_table name,
-    key_fields BOOLEAN
+    key_fields boolean
 )
     RETURNS text
     LANGUAGE plpgsql
@@ -674,14 +739,14 @@ BEGIN
             )
         ORDER BY att.attnum
     LOOP
-        result := result
-            || ' OR old.' || quote_ident(r.attname) || ' <> new.' || quote_ident(r.attname);
+        result := result || format(' OR old.%I <> new.%I', r.attname, r.attname);
         IF NOT r.attnotnull THEN
             result := result
-                || ' OR (old.' || quote_ident(r.attname) || ' IS NULL AND new.' || quote_ident(r.attname) || ' IS NOT NULL)'
-                || ' OR (new.' || quote_ident(r.attname) || ' IS NULL AND old.' || quote_ident(r.attname) || ' IS NOT NULL)';
+                || format(' OR (old.%I IS NULL AND new.%I IS NOT NULL)', r.attname, r.attname)
+                || format(' OR (new.%I IS NULL AND old.%I IS NOT NULL)', r.attname, r.attname);
         END IF;
     END LOOP;
+
     RETURN substring(result from 5);
 END;
 $$;
@@ -747,10 +812,17 @@ BEGIN
     --    AND TABNAME = SOURCE_TABLE) = 0 THEN
     --        CALL SIGNAL_STATE(HISTORY_NO_PK_STATE, 'Source table must have a primary key');
     --END IF;
+
     -- Drop any existing table with the same name as the destination table
     FOR r IN
         SELECT
-            'DROP TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) AS drop_cmd
+            format(
+                $sql$
+                DROP TABLE %I.%I
+                $sql$,
+
+                dest_schema, dest_table
+            ) AS drop_cmd
         FROM
             pg_catalog.pg_class c
             JOIN pg_catalog.pg_namespace n
@@ -761,6 +833,7 @@ BEGIN
     LOOP
         EXECUTE r.drop_cmd;
     END LOOP;
+
     -- Calculate comma-separated lists of key columns in the order they are
     -- declared in the primary key (for generation of constraints later)
     FOR r IN
@@ -791,19 +864,31 @@ BEGIN
         key_cols := key_cols
             || quote_ident(r.attname) || ',';
     END LOOP;
+
     -- Create the history table based on the source table
-    EXECUTE
-        'CREATE TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' AS '
-        || '('
-        ||     'SELECT '
-        ||          x_history_effdefault(resolution) || ' AS ' || quote_ident(x_history_effname(resolution)) || ','
-        ||          x_history_expdefault(resolution) || ' AS ' || quote_ident(x_history_expname(resolution)) || ','
-        ||         't.* '
-        ||     'FROM '
-        ||          quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS t'
-        || ')'
-        || 'WITH NO DATA '
-        || CASE WHEN dest_tbspace IS NOT NULL THEN 'TABLESPACE ' || quote_ident(dest_tbspace) ELSE '' END;
+    EXECUTE format(
+        $sql$
+        CREATE TABLE %I.%I AS (
+            SELECT
+                %s AS %I,
+                %s AS %I,
+                t.*
+            FROM
+                %I.%I AS t
+        ) WITH NO DATA
+        $sql$,
+
+        dest_schema, dest_table,
+        x_history_effdefault(resolution),
+        x_history_effname(resolution),
+        x_history_expdefault(resolution),
+        x_history_expname(resolution),
+        source_schema, source_table
+    ) || CASE WHEN dest_tbspace IS NOT NULL
+        THEN format(' TABLESPACE %I', dest_tbspace)
+        ELSE ''
+    END;
+
     -- Copy NOT NULL constraints from the source table to the history table
     FOR r IN
         SELECT
@@ -816,10 +901,15 @@ BEGIN
             AND attnum > 0
             AND NOT attisdropped
     LOOP
-        EXECUTE
-            'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-            || ' ALTER COLUMN ' || quote_ident(r.attname) || ' SET NOT NULL';
+        EXECUTE format(
+            $sql$
+            ALTER TABLE %I.%I ALTER COLUMN %I SET NOT NULL
+            $sql$,
+
+            dest_schema, dest_table, r.attname
+        );
     END LOOP;
+
     -- Copy CHECK and EXCLUDE constraints from the source table to the history
     -- table. Note that we do not copy FOREIGN KEY constraints as there's no
     -- good method of matching a parent record in a historized table.
@@ -832,44 +922,70 @@ BEGIN
             conrelid = table_oid(source_schema, source_table)
             AND contype IN ('c', 'x')
     LOOP
-        EXECUTE
-            'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-            || ' ADD ' || r.con_def;
+        EXECUTE format(
+            $sql$
+            ALTER TABLE %I.%I ADD %s
+            $sql$,
+
+            dest_schema, dest_table, r.con_def
+        );
     END LOOP;
+
     -- Create two unique constraints, both based on the source table's primary
     -- key, plus the EFFECTIVE and EXPIRY fields respectively. Use INCLUDE for
     -- additional small fields in the EFFECTIVE index. The columns included are
     -- the same as those included in the primary key of the source table.
     -- TODO tablespaces...
     key_name := quote_ident(dest_table || '_pkey');
-    EXECUTE
-        'CREATE UNIQUE INDEX '
-        || key_name || ' '
-        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-        || '(' || key_cols || quote_ident(x_history_effname(resolution))
-        || ')';
-    EXECUTE
-        'CREATE UNIQUE INDEX '
-        || quote_ident(dest_table || '_ix1') || ' '
-        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-        || '(' || key_cols || quote_ident(x_history_expname(resolution))
-        || ')';
+    EXECUTE format(
+        $sql$
+        CREATE UNIQUE INDEX %I ON %I.%I (%s %I)
+        $sql$,
+
+        dest_table || '_pkey',
+        dest_schema, dest_table,
+        key_cols, x_history_effname(resolution)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE UNIQUE INDEX %I ON %I.%I (%s %I)
+        $sql$,
+
+        dest_table || '_ix1',
+        dest_schema, dest_table,
+        key_cols, x_history_expname(resolution)
+    );
+
     -- Create additional indexes that are useful for performance purposes
-    EXECUTE
-        'CREATE INDEX '
-        || quote_ident(dest_table || '_ix2') || ' '
-        || 'ON ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-        || '(' || quote_ident(x_history_effname(resolution))
-        || ',' || quote_ident(x_history_expname(resolution))
-        || ')';
+    EXECUTE format(
+        $sql$
+        CREATE INDEX %I ON %I.%I (%I, %I)
+        $sql$,
+
+        dest_table || '_ix2',
+        dest_schema, dest_table,
+        x_history_effname(resolution),
+        x_history_expname(resolution)
+    );
+
     -- Create a primary key with the same fields as the EFFECTIVE index defined
     -- above.
-    EXECUTE
-        'ALTER TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
-        || 'ADD PRIMARY KEY USING INDEX ' || key_name || ', '
-        || 'ADD CHECK (' || quote_ident(x_history_effname(resolution)) || ' <= ' || quote_ident(x_history_expname(resolution)) || '), '
-        || 'ALTER COLUMN ' || quote_ident(x_history_effname(resolution)) || ' SET DEFAULT ' || x_history_effdefault(resolution) || ', '
-        || 'ALTER COLUMN ' || quote_ident(x_history_expname(resolution)) || ' SET DEFAULT ' || x_history_expdefault(resolution);
+    EXECUTE format(
+        $sql$
+        ALTER TABLE %I.%I
+            ADD PRIMARY KEY USING INDEX %I,
+            ADD CHECK (%I <= %I),
+            ALTER COLUMN %I SET DEFAULT %s,
+            ALTER COLUMN %I SET DEFAULT %s
+        $sql$,
+
+        dest_schema, dest_table,
+        dest_table || '_pkey',
+        x_history_effname(resolution), x_history_expname(resolution),
+        x_history_effname(resolution), x_history_effdefault(resolution),
+        x_history_expname(resolution), x_history_expdefault(resolution)
+    );
+
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -883,17 +999,35 @@ BEGIN
     --DELETE FROM saved_auths WHERE
     --    privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE');
     PERFORM restore_auth(dest_schema, dest_table);
+
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    EXECUTE
-        'COMMENT ON TABLE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table)
-        || ' IS ' || quote_literal('History table which tracks the content of @' || source_schema || '.' || source_table);
-    EXECUTE
-        'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_effname(resolution))
-        || ' IS ' || quote_literal('The date/timestamp from which this row was present in the source table');
-    EXECUTE
-        'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(x_history_expname(resolution))
-        || ' IS ' || quote_literal('The date/timestamp until which this row was present in the source table (rows with 9999-12-31 currently exist in the source table)');
+    EXECUTE format(
+        $sql$
+        COMMENT ON TABLE %I.%I IS %L
+        $sql$,
+
+        dest_schema, dest_table,
+        format('History table which tracks the content of @%I.%I',
+            source_schema, source_table)
+    );
+    EXECUTE format(
+        $sql$
+        COMMENT ON COLUMN %I.%I.%I IS %L
+        $sql$,
+
+        dest_schema, dest_table, x_history_effname(resolution),
+        'The date/timestamp from which this row was present in the source table'
+    );
+    EXECUTE format(
+        $sql$
+        COMMENT ON COLUMN %I.%I.%I IS %L
+        $sql$,
+
+        dest_schema, dest_table, x_history_expname(resolution),
+        'The date/timestamp until which this row was present in the source '
+        'table (rows with 9999-12-31 currently exist in the source table)'
+    );
     FOR r IN
         SELECT
             attname,
@@ -907,9 +1041,14 @@ BEGIN
             AND attnum > 0
             AND NOT attisdropped
     LOOP
-        EXECUTE
-            'COMMENT ON COLUMN ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || '.' || quote_ident(r.attname)
-            || ' IS ' || quote_literal(r.attdesc);
+        EXECUTE format(
+            $sql$
+            COMMENT ON COLUMN %I.%I.%I IS %L
+            $sql$,
+
+            dest_schema, dest_table, r.attname,
+            r.attdesc
+        );
     END LOOP;
 END;
 $$;
@@ -1034,9 +1173,14 @@ DECLARE
     r record;
 BEGIN
     PERFORM assert_table_exists(source_schema, source_table);
-    EXECUTE
-        'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
-        || x_history_changes(source_schema, source_table);
+    EXECUTE format(
+        $sql$
+        CREATE VIEW %I.%I AS %r
+        $sql$,
+
+        dest_schema, dest_view, x_history_changes(source_schema, source_table)
+    );
+
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -1050,20 +1194,32 @@ BEGIN
     DELETE FROM saved_auths WHERE
         privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
     PERFORM restore_auth(dest_schema, dest_view);
+
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    EXECUTE
-        'COMMENT ON COLUMN '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('changed')
-        || ' IS ' || quote_literal('The date/timestamp on which this row changed');
-    EXECUTE
-        'COMMENT ON COLUMN '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('change')
-        || ' IS ' || quote_literal('The type of change that occured (INSERT/UPDATE/DELETE)');
-    EXECUTE
-        'COMMENT ON VIEW '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
-        || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of changes');
+    EXECUTE format(
+        $sql$
+        COMMENT ON COLUMN %I.%I.changed IS %L
+        $sql$,
+
+        dest_schema, dest_view, 'The date/timestamp on which this row changed'
+    );
+    EXECUTE format(
+        $sql$
+        COMMENT ON COLUMN %I.%I.change IS %L
+        $sql$,
+
+        dest_schema, dest_view, 'The type of change that occurred (INSERT/UPDATE/DELETE)'
+    );
+    EXECUTE format(
+        $sql$
+        COMMENT ON VIEW %I.%I IS %L
+        $sql$,
+
+        dest_schema, dest_view,
+        format('View showing the content of @%I.%I as a series of changes',
+            source_schema, source_table)
+    );
     FOR r IN
         SELECT
             attname,
@@ -1077,14 +1233,24 @@ BEGIN
             AND attnum > 2
             AND NOT attisdropped
     LOOP
-        EXECUTE
-            'COMMENT ON COLUMN '
-            || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('old_' || r.attname)
-            || ' IS ' || quote_literal('Value of @' || source_schema || '.' || source_table || '.' || r.attdesc || ' prior to change');
-        EXECUTE
-            'COMMENT ON COLUMN '
-            || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('new_' || r.attname)
-            || ' IS ' || quote_literal('Value of @' || source_schema || '.' || source_table || '.' || r.attdesc || ' after change');
+        EXECUTE format(
+            $sql$
+            COMMENT ON COLUMN %I.%I.%I IS %L
+            $sql$,
+
+            dest_schema, dest_view, 'old_' || r.attname,
+            format('Value of @%I.%I.%I prior to change',
+                source_schema, source_table, r.attname)
+        );
+        EXECUTE format(
+            $sql$
+            COMMENT ON COLUMN %I.%I.%I IS %L
+            $sql$,
+
+            dest_schema, dest_view, 'new_' || r.attname,
+            format('Value of @%I.%I.%I after change',
+                source_schema, source_table, r.attname)
+        );
     END LOOP;
 END;
 $$;
@@ -1181,9 +1347,15 @@ DECLARE
     r record;
 BEGIN
     PERFORM assert_table_exists(source_schema, source_table);
-    EXECUTE
-        'CREATE VIEW ' || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || ' AS '
-        || x_history_snapshots(source_schema, source_table, resolution);
+    EXECUTE format(
+        $sql$
+        CREATE VIEW %I.%I AS %s
+        $sql$,
+
+        dest_schema, dest_view,
+        x_history_snapshots(source_schema, source_table, resolution)
+    );
+
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -1197,16 +1369,25 @@ BEGIN
     DELETE FROM saved_auths WHERE
         privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
     PERFORM restore_auth(dest_schema, dest_view);
+
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
-    EXECUTE
-        'COMMENT ON COLUMN '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident('snapshot')
-        || ' IS ' || quote_literal('The date/timestamp of this row''s snapshot');
-    EXECUTE
-        'COMMENT ON VIEW '
-        || quote_ident(dest_schema) || '.' || quote_ident(dest_view)
-        || ' IS ' || quote_literal('View showing the content of @' || source_schema || '.' || source_table || ' as a series of snapshots');
+    EXECUTE format(
+        $sql$
+        COMMENT ON COLUMN %I.%I.snapshot IS %L
+        $sql$,
+
+        dest_schema, dest_view, 'The date/timestamp of the row''s snapshot'
+    );
+    EXECUTE format(
+        $sql$
+        COMMENT ON VIEW %I.%I IS %L
+        $sql$,
+
+        dest_schema, dest_view, format(
+            'View showing the content of @%I.%I as a series of snapshots',
+            source_schema, source_table)
+    );
     FOR r IN
         SELECT
             attname,
@@ -1220,10 +1401,15 @@ BEGIN
             AND attnum > 2
             AND NOT attisdropped
     LOOP
-        EXECUTE
-            'COMMENT ON COLUMN '
-            || quote_ident(dest_schema) || '.' || quote_ident(dest_view) || '.' || quote_ident(r.attname)
-            || ' IS ' || quote_literal('Value of @' || source_schema || '.' || source_table || '.' || r.attdesc || ' prior to change');
+        EXECUTE format(
+            $sql$
+            COMMENT ON COLUMN %I.%I.%I IS %L
+            $sql$,
+
+            dest_schema, dest_view, r.attname, format(
+                'Value of @%I.%I.%I prior to change',
+                source_schema, source_table, r.attname)
+        );
     END LOOP;
 END;
 $$;
@@ -1320,11 +1506,17 @@ DECLARE
 BEGIN
     PERFORM assert_table_exists(source_schema, source_table);
     PERFORM assert_table_exists(dest_schema, dest_table);
+
     -- Drop any existing triggers with the same name as the destination
     -- triggers in case there are any left over
     FOR r IN
-        SELECT
-            'DROP TRIGGER ' || quote_ident(tgname) || ' ON ' || tgrelid::regclass AS drop_trig
+        SELECT format(
+            $sql$
+            DROP TRIGGER %I ON %I
+            $sql$,
+
+            tgname, tgrelid::regclass
+        ) AS drop_trig
         FROM
             pg_catalog.pg_trigger
         WHERE
@@ -1338,11 +1530,17 @@ BEGIN
     LOOP
         EXECUTE r.drop_trig;
     END LOOP;
+
     -- Drop any existing functions with the same name as the destination
     -- trigger functions
     FOR r IN
-        SELECT
-            'DROP FUNCTION ' || p.oid::regprocedure || ' CASCADE' AS drop_func
+        SELECT format(
+            $sql$
+            DROP FUNCTION %I CASCADE
+            $sql$,
+
+            p.oid::regprocedure
+        ) AS drop_func
         FROM
             pg_catalog.pg_proc p
             JOIN pg_catalog.pg_namespace n
@@ -1360,124 +1558,215 @@ BEGIN
     LOOP
         EXECUTE r.drop_func;
     END LOOP;
+
     -- Create the KEYCHG trigger
-    EXECUTE
-        'CREATE FUNCTION ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_keychg') || '() '
-        ||     'RETURNS trigger '
-        ||     'LANGUAGE plpgsql '
-        ||     'IMMUTABLE '
-        || 'AS $func$ '
-        || 'BEGIN '
-        ||     'RAISE EXCEPTION USING '
-        ||         'ERRCODE = ' || quote_literal('UTH01') || ', '
-        ||         'MESSAGE = ' || quote_literal('Cannot update unique key of a row in ' || source_schema || '.' || source_table) || ', '
-        ||         'TABLE = ' || quote_literal(table_oid(source_schema, source_table)) || '; '
-        ||     'RETURN NULL; '
-        || 'END; '
-        || '$func$';
-    EXECUTE
-        'CREATE TRIGGER ' || quote_ident(source_table || '_keychg') || ' '
-        ||     'BEFORE UPDATE OF ' || x_history_update_fields(source_schema, source_table, true) || ' '
-        ||     'ON ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' '
-        ||     'FOR EACH ROW '
-        ||     'WHEN (' || x_history_update_when(source_schema, source_table, true) || ') '
-        ||     'EXECUTE PROCEDURE ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_keychg') || '()';
+    EXECUTE format(
+        $sql$
+        CREATE FUNCTION %I.%I()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            IMMUTABLE
+        AS $func$
+        BEGIN
+            RAISE EXCEPTION USING
+                ERRCODE = %L,
+                MESSAGE = %L,
+                TABLE = %L;
+            RETURN NULL;
+        END;
+        $func$
+        $sql$,
+
+        source_schema, source_table || '_keychg',
+        'UTH01', format('Cannot update unique key of a row in %I.%I',
+            source_schema, source_table),
+        table_oid(source_schema, source_table)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE TRIGGER %I
+            BEFORE UPDATE OF %s
+            ON %I.%I
+            FOR EACH ROW
+            WHEN (%s)
+            EXECUTE PROCEDURE %I.%I()
+        $sql$,
+
+        source_table || '_keychg',
+        x_history_update_fields(source_schema, source_table, true),
+        source_schema, source_table,
+        x_history_update_when(source_schema, source_table, true),
+        source_schema, source_table || '_keychg'
+    );
+
     -- Create the INSERT trigger
-    EXECUTE
-        'CREATE FUNCTION ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_insert') || '() '
-        ||     'RETURNS trigger '
-        ||     'LANGUAGE plpgsql '
-        ||     'VOLATILE '
-        || 'AS $func$ '
-        || 'BEGIN '
-        ||      x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
-        ||     'RETURN NEW;'
-        || 'END; '
-        || '$func$';
-    EXECUTE
-        'CREATE TRIGGER ' || quote_ident(source_table || '_insert') || ' '
-        ||     'AFTER INSERT ON ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' '
-        ||     'FOR EACH ROW '
-        ||     'EXECUTE PROCEDURE ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_insert') || '()';
+    EXECUTE format(
+        $sql$
+        CREATE FUNCTION %I.%I()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            VOLATILE
+        AS $func$
+        BEGIN
+            %s;
+            RETURN NEW;
+        END;
+        $func$
+        $sql$,
+
+        soruce_schema, source_table || '_insert',
+        x_history_insert(
+            source_schema, source_table,
+            dest_schema, dest_table,
+            resolution, shift)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE TRIGGER %I
+            AFTER INSERT ON %I.%I
+            FOR EACH ROW
+            EXECUTE PROCEDURE %I.%I()
+        $sql$,
+
+        source_table || '_insert',
+        source_schema, source_table,
+        source_schema, source_table || '_insert'
+    );
+
     -- Create the UPDATE trigger
-    EXECUTE
-        'CREATE FUNCTION ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_update') || '()'
-        ||     'RETURNS trigger '
-        ||     'LANGUAGE plpgsql '
-        ||     'VOLATILE '
-        || 'AS $func$ '
-        || 'DECLARE '
-        ||     'chk_date TIMESTAMP; '
-        || 'BEGIN '
-        ||     'chk_date := ('
-        ||         x_history_check(source_schema, source_table, dest_schema, dest_table, resolution)
-        ||     '); '
-        ||     'IF ' || x_history_effnext(resolution, shift) || ' > chk_date THEN '
-        ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
-        ||         'IF NOT found THEN '
-        ||             'RAISE EXCEPTION USING '
-        ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
-        ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
-        ||         'END IF; '
-        ||         x_history_insert(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
-        ||     'ELSE '
-        ||         x_history_update(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
-        ||         'IF NOT found THEN '
-        ||             'RAISE EXCEPTION USING '
-        ||                 'ERRCODE = ' || quote_literal('UTH03') || ', '
-        ||                 'MESSAGE = ' || quote_literal('Failed to update current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
-        ||         'END IF; '
-        ||     'END IF; '
-        ||     'RETURN NEW; '
-        || 'END; '
-        || '$func$';
-    EXECUTE
-        'CREATE TRIGGER ' || quote_ident(source_table || '_update') || ' '
-        ||     'AFTER UPDATE OF ' || x_history_update_fields(source_schema, source_table, false) || ' '
-        ||     'ON ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' '
-        ||     'FOR EACH ROW '
-        ||     'WHEN (' || x_history_update_when(source_schema, source_table, false) || ') '
-        ||     'EXECUTE PROCEDURE ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_update') || '()';
+    -- XXX must not do this when table is purely keys (no non-key attrs)
+    EXECUTE format(
+        $sql$
+        CREATE FUNCTION %I.%I()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            VOLATILE
+        AS $func$
+        DECLARE
+            chk_date timestamp;
+        BEGIN
+            chk_date := (
+                %s
+            );
+            IF %s > chk_date THEN
+                -- Expire current history row
+                %s;
+                IF NOT found THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = %L,
+                        MESSAGE = %L,
+                        TABLE = %L;
+                END IF;
+                -- Insert new history row
+                %s;
+            ELSE
+                -- Update existing history row
+                %s;
+                IF NOT found THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = %L,
+                        MESSAGE = %L,
+                        TABLE = %L;
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $func$
+        $sql$,
+
+        source_schema, source_table || '_update',
+        x_history_check(
+            source_schema, source_table, dest_schema, dest_table, resolution),
+        x_history_effnext(resolution, shift),
+        x_history_expire(
+            source_schema, source_table, dest_schema, dest_table, resolution, shift),
+        'UTH02', 'Failed to expire current history row',
+        table_oid(dest_schema, dest_table),
+        x_history_insert(
+            source_schema, source_table, dest_schema, dest_table, resolution, shift),
+        x_history_update(
+            source_schema, source_table, dest_schema, dest_table, resolution),
+        'UTH03', 'Failed to update current history row',
+        table_oid(dest_schema, dest_table)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE TRIGGER %I
+            AFTER UPDATE OF %s
+            ON %I.%I
+            FOR EACH ROW
+            WHEN (%s)
+            EXECUTE PROCEDURE %I.%I()
+        $sql$,
+
+        source_table || '_update',
+        x_history_update_fields(source_schema, source_table, false),
+        source_schema, source_table,
+        x_history_update_when(source_schema, source_table, false),
+        source_schema, source_table || '_update'
+    );
+
     -- Create the DELETE trigger
-    EXECUTE
-        'CREATE FUNCTION ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_delete') || '()'
-        ||     'RETURNS trigger '
-        ||     'LANGUAGE plpgsql '
-        ||     'VOLATILE '
-        || 'AS $func$ '
-        || 'DECLARE '
-        ||     'chk_date TIMESTAMP; '
-        || 'BEGIN '
-        ||     'chk_date := ('
-        ||         x_history_check(source_schema, source_table, dest_schema, dest_table, resolution)
-        ||     '); '
-        ||     'IF ' || x_history_effnext(resolution, shift) || ' > chk_date THEN '
-        ||         x_history_expire(source_schema, source_table, dest_schema, dest_table, resolution, shift) || '; '
-        ||         'IF NOT found THEN '
-        ||             'RAISE EXCEPTION USING '
-        ||                 'ERRCODE = ' || quote_literal('UTH02') || ', '
-        ||                 'MESSAGE = ' || quote_literal('Failed to expire current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
-        ||         'END IF; '
-        ||     'ELSE '
-        ||         x_history_delete(source_schema, source_table, dest_schema, dest_table, resolution) || '; '
-        ||         'IF NOT found THEN '
-        ||             'RAISE EXCEPTION USING '
-        ||                 'ERRCODE = ' || quote_literal('UTH04') || ', '
-        ||                 'MESSAGE = ' || quote_literal('Failed to delete current history row') || ', '
-        ||                 'TABLE = ' || quote_literal(table_oid(dest_schema, dest_table)) || '; '
-        ||         'END IF; '
-        ||     'END IF; '
-        ||     'RETURN OLD; '
-        || 'END; '
-        || '$func$';
-    EXECUTE
-        'CREATE TRIGGER ' || quote_ident(source_table || '_delete') || ' '
-        ||     'AFTER DELETE ON ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' '
-        ||     'FOR EACH ROW '
-        ||     'EXECUTE PROCEDURE ' || quote_ident(source_schema) || '.' || quote_ident(source_table || '_delete') || '()';
+    EXECUTE format(
+        $sql$
+        CREATE FUNCTION %I.%I()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            VOLATILE
+        AS $func$
+        DECLARE
+            chk_date timestamp;
+        BEGIN
+            chk_date := (
+                %s
+            );
+            IF %s > chk_date THEN
+                %s;
+                IF NOT found THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = %L,
+                        MESSAGE = %L,
+                        TABLE = %L;
+                END IF;
+            ELSE
+                %s;
+                IF NOT found THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = %L,
+                        MESSAGE = %L,
+                        TABLE = %L;
+                END IF;
+            END IF;
+            RETURN OLD;
+        END;
+        $func$
+        $sql$,
+
+        source_schema, source_table || '_delete',
+        x_history_check(
+            source_schema, source_table, dest_schema, dest_table, resolution),
+        x_history_effnext(resolution, shift),
+        x_history_expire(
+            source_schema, source_table, dest_schema, dest_table, resolution, shift),
+        'UTH02', 'Failed to expire current history row',
+        table_oid(dest_schema, dest_table),
+        x_history_delete(
+            source_schema, source_table, dest_schema, dest_table, resolution),
+        'UTH04', 'Failed to delete current history row',
+        table_oid(dest_schema, dest_table)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE TRIGGER %I
+            AFTER DELETE ON %I.%I
+            FOR EACH ROW
+            EXECUTE PROCEDURE %I.%I()
+        $sql$,
+
+        source_table || '_delete',
+        source_schema, source_table,
+        source_schema, source_table || '_delete'
+    );
 END;
 $$;
 
