@@ -56,7 +56,7 @@ CREATE FUNCTION auths_held(
 )
     RETURNS TABLE (
         object_type varchar(20),
-        object_id varchar(100),
+        object_id oid,
         auth varchar(140),
         suffix varchar(20)
     )
@@ -66,8 +66,8 @@ AS $$
     WITH
     role_auths AS (
         SELECT
-            ''::varchar,
-            ''::varchar,
+            'ROLE'::varchar,
+            null::oid,
             quote_ident(rolname),
             CASE WHEN pg_has_role(auth_name, rolname, 'USAGE WITH ADMIN OPTION')
                 THEN 'WITH ADMIN OPTION'
@@ -81,7 +81,7 @@ AS $$
     table_auths AS (
         SELECT
             'TABLE'::varchar,
-            quote_ident(table_schema) || '.' || quote_ident(table_name),
+            (quote_ident(table_schema) || '.' || quote_ident(table_name))::regclass,
             privilege_type,
             CASE WHEN is_grantable::boolean THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
@@ -92,7 +92,11 @@ AS $$
     routine_auths AS (
         SELECT
             'FUNCTION'::varchar,
-            quote_ident(specific_schema) || '.' || quote_ident(specific_name),
+            -- XXX This is a dirty hack which assumes the oid is the last
+            -- part of the specific name, separated by underscore, but it's
+            -- the cleanest way (I can see) to get from routine_privileges to
+            -- the OID ofthe procedure
+            substring(specific_name from '_([0-9]*)$')::regprocedure,
             'EXECUTE'::varchar,
             CASE WHEN is_grantable::boolean THEN 'WITH GRANT OPTION' ELSE '' END
         FROM
@@ -101,8 +105,7 @@ AS $$
             grantee = auth_name
     )
     SELECT * FROM role_auths                 UNION
-    -- XXX specific name isn't usable for anything at this time
-    --SELECT * FROM routine_auths              UNION
+    SELECT * FROM routine_auths              UNION
     SELECT * FROM table_auths;
 $$;
 
@@ -132,7 +135,7 @@ CREATE FUNCTION auth_diff(
 )
     RETURNS TABLE(
         object_type varchar(20),
-        object_id varchar(100),
+        object_id oid,
         auth varchar(140),
         suffix varchar(20)
     )
@@ -208,7 +211,7 @@ CREATE FUNCTION x_copy_list(
 )
     RETURNS TABLE (
         object_type varchar(20),
-        object_id varchar(100),
+        object_id oid,
         ddl text
     )
     LANGUAGE SQL
@@ -217,12 +220,19 @@ AS $$
     SELECT
         object_type,
         object_id,
-        'GRANT ' || auth ||
+        format(
+            $sql$
+            GRANT %s %s TO %I %s
+            $sql$,
+
+            auth,
             CASE object_type
-                WHEN '' THEN ''
-                ELSE ' ON ' || object_type || ' ' || object_id
-            END
-            || ' TO ' || quote_ident(dest) || ' ' || suffix AS ddl
+                WHEN 'ROLE' THEN ''
+                WHEN 'TABLE' THEN format('ON TABLE %s', object_id::regclass)
+                WHEN 'FUNCTION' THEN format('ON FUNCTION %s', object_id::regprocedure)
+            END,
+            dest, suffix
+        ) AS ddl
     FROM
         auth_diff(source, dest);
 $$;
@@ -272,7 +282,7 @@ CREATE FUNCTION x_remove_list(
 )
     RETURNS TABLE (
         object_type varchar(20),
-        object_id varchar(100),
+        object_id oid,
         auth varchar(140),
         ddl text
     )
@@ -283,12 +293,19 @@ AS $$
         object_type,
         object_id,
         auth,
-        'REVOKE ' || auth ||
+        format(
+            $sql$
+            REVOKE %s %s FROM %I CASCADE
+            $sql$,
+
+            auth,
             CASE object_type
-                WHEN '' THEN ''
-                ELSE ' ON ' || object_type || ' ' || object_id
-            END
-            || ' FROM ' || quote_ident(auth_name) || ' CASCADE' AS ddl
+                WHEN 'ROLE' THEN ''
+                WHEN 'TABLE' THEN format('ON TABLE %s', object_id::regclass)
+                WHEN 'FUNCTION' THEN format('ON FUNCTION %s', object_id::regprocedure)
+            END,
+            auth_name
+        ) AS ddl
     FROM
         auths_held(auth_name)
     WHERE
@@ -415,8 +432,8 @@ AS $$
             information_schema.table_privileges
         WHERE
             table_catalog = current_database()
-            AND table_schema = 'ark_poc'
-            AND table_name = 'students'
+            AND table_schema = aschema
+            AND table_name = atable
         GROUP BY
             grantee,
             privilege_type
@@ -427,8 +444,8 @@ AS $$
         FROM
             data AS src
         WHERE
-            dest.table_schema = 'ark_poc'
-            AND dest.table_name = 'students'
+            dest.table_schema = aschema
+            AND dest.table_name = atable
             AND dest.grantee = src.grantee
             AND dest.privilege_type = src.privilege_type
         RETURNING
@@ -442,8 +459,8 @@ AS $$
         is_grantable
     )
     SELECT
-        'ark_poc',
-        'students',
+        aschema,
+        atable,
         grantee,
         privilege_type,
         is_grantable
