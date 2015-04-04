@@ -1175,7 +1175,7 @@ BEGIN
     PERFORM assert_table_exists(source_schema, source_table);
     EXECUTE format(
         $sql$
-        CREATE VIEW %I.%I AS %r
+        CREATE VIEW %I.%I AS %s
         $sql$,
 
         dest_schema, dest_view, x_history_changes(source_schema, source_table)
@@ -1503,9 +1503,26 @@ CREATE FUNCTION create_history_triggers(
 AS $$
 DECLARE
     r record;
+    all_keys boolean;
 BEGIN
     PERFORM assert_table_exists(source_schema, source_table);
     PERFORM assert_table_exists(dest_schema, dest_table);
+
+    -- Determine whether the source table is "all key, no attributes"
+    all_keys := (
+        SELECT
+            array_length(con.conkey, 1) = count(att.attnum)
+        FROM
+            pg_catalog.pg_attribute att
+            JOIN pg_catalog.pg_constraint con
+                ON att.attrelid = con.conrelid
+        WHERE
+            att.attrelid = table_oid(source_schema, source_table)
+            AND att.attnum > 0
+            AND NOT att.attisdropped
+            AND con.contype = 'p'
+        GROUP BY con.conkey
+    );
 
     -- Drop any existing triggers with the same name as the destination
     -- triggers in case there are any left over
@@ -1533,10 +1550,12 @@ BEGIN
 
     -- Drop any existing functions with the same name as the destination
     -- trigger functions
+    -- XXX Surely this should be DROP FUNCTION %I - but that seems to fail as
+    -- it tries to include the () after the function name...
     FOR r IN
         SELECT format(
             $sql$
-            DROP FUNCTION %I CASCADE
+            DROP FUNCTION %s CASCADE
             $sql$,
 
             p.oid::regprocedure
@@ -1614,7 +1633,7 @@ BEGIN
         $func$
         $sql$,
 
-        soruce_schema, source_table || '_insert',
+        source_schema, source_table || '_insert',
         x_history_insert(
             source_schema, source_table,
             dest_schema, dest_table,
@@ -1634,77 +1653,78 @@ BEGIN
     );
 
     -- Create the UPDATE trigger
-    -- XXX must not do this when table is purely keys (no non-key attrs)
-    EXECUTE format(
-        $sql$
-        CREATE FUNCTION %I.%I()
-            RETURNS trigger
-            LANGUAGE plpgsql
-            VOLATILE
-        AS $func$
-        DECLARE
-            chk_date timestamp;
-        BEGIN
-            chk_date := (
-                %s
-            );
-            IF %s > chk_date THEN
-                -- Expire current history row
-                %s;
-                IF NOT found THEN
-                    RAISE EXCEPTION USING
-                        ERRCODE = %L,
-                        MESSAGE = %L,
-                        TABLE = %L;
+    IF NOT all_keys THEN
+        EXECUTE format(
+            $sql$
+            CREATE FUNCTION %I.%I()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                VOLATILE
+            AS $func$
+            DECLARE
+                chk_date timestamp;
+            BEGIN
+                chk_date := (
+                    %s
+                );
+                IF %s > chk_date THEN
+                    -- Expire current history row
+                    %s;
+                    IF NOT found THEN
+                        RAISE EXCEPTION USING
+                            ERRCODE = %L,
+                            MESSAGE = %L,
+                            TABLE = %L;
+                    END IF;
+                    -- Insert new history row
+                    %s;
+                ELSE
+                    -- Update existing history row
+                    %s;
+                    IF NOT found THEN
+                        RAISE EXCEPTION USING
+                            ERRCODE = %L,
+                            MESSAGE = %L,
+                            TABLE = %L;
+                    END IF;
                 END IF;
-                -- Insert new history row
-                %s;
-            ELSE
-                -- Update existing history row
-                %s;
-                IF NOT found THEN
-                    RAISE EXCEPTION USING
-                        ERRCODE = %L,
-                        MESSAGE = %L,
-                        TABLE = %L;
-                END IF;
-            END IF;
-            RETURN NEW;
-        END;
-        $func$
-        $sql$,
+                RETURN NEW;
+            END;
+            $func$
+            $sql$,
 
-        source_schema, source_table || '_update',
-        x_history_check(
-            source_schema, source_table, dest_schema, dest_table, resolution),
-        x_history_effnext(resolution, shift),
-        x_history_expire(
-            source_schema, source_table, dest_schema, dest_table, resolution, shift),
-        'UTH02', 'Failed to expire current history row',
-        table_oid(dest_schema, dest_table),
-        x_history_insert(
-            source_schema, source_table, dest_schema, dest_table, resolution, shift),
-        x_history_update(
-            source_schema, source_table, dest_schema, dest_table, resolution),
-        'UTH03', 'Failed to update current history row',
-        table_oid(dest_schema, dest_table)
-    );
-    EXECUTE format(
-        $sql$
-        CREATE TRIGGER %I
-            AFTER UPDATE OF %s
-            ON %I.%I
-            FOR EACH ROW
-            WHEN (%s)
-            EXECUTE PROCEDURE %I.%I()
-        $sql$,
+            source_schema, source_table || '_update',
+            x_history_check(
+                source_schema, source_table, dest_schema, dest_table, resolution),
+            x_history_effnext(resolution, shift),
+            x_history_expire(
+                source_schema, source_table, dest_schema, dest_table, resolution, shift),
+            'UTH02', 'Failed to expire current history row',
+            table_oid(dest_schema, dest_table),
+            x_history_insert(
+                source_schema, source_table, dest_schema, dest_table, resolution, shift),
+            x_history_update(
+                source_schema, source_table, dest_schema, dest_table, resolution),
+            'UTH03', 'Failed to update current history row',
+            table_oid(dest_schema, dest_table)
+        );
+        EXECUTE format(
+            $sql$
+            CREATE TRIGGER %I
+                AFTER UPDATE OF %s
+                ON %I.%I
+                FOR EACH ROW
+                WHEN (%s)
+                EXECUTE PROCEDURE %I.%I()
+            $sql$,
 
-        source_table || '_update',
-        x_history_update_fields(source_schema, source_table, false),
-        source_schema, source_table,
-        x_history_update_when(source_schema, source_table, false),
-        source_schema, source_table || '_update'
-    );
+            source_table || '_update',
+            x_history_update_fields(source_schema, source_table, false),
+            source_schema, source_table,
+            x_history_update_when(source_schema, source_table, false),
+            source_schema, source_table || '_update'
+        );
+    END IF;
 
     -- Create the DELETE trigger
     EXECUTE format(

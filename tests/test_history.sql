@@ -321,3 +321,55 @@ VALUES (assert_equals(1::bigint, (
 DROP TABLE foo_history;
 DROP TABLE foo;
 
+-- Test that operation works with tables that are "all key, no attributes"
+
+CREATE TABLE foo (
+    foo_id integer NOT NULL,
+    bar_id integer NOT NULL,
+    CONSTRAINT foo_pk PRIMARY KEY (foo_id, bar_id)
+);
+
+SELECT create_history_table('foo', 'day');
+SELECT assert_table_exists('foo_history');
+VALUES (assert_equals(4::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT attnum, attname
+        FROM pg_catalog.pg_attribute
+        WHERE attrelid = 'foo_history'::regclass
+        AND attnum > 0
+
+        INTERSECT
+
+        VALUES
+            (1, 'effective'),
+            (2, 'expiry'),
+            (3, 'foo_id'),
+            (4, 'bar_id')
+    ) AS t)));
+
+SELECT create_history_triggers('foo', 'day');
+SELECT assert_trigger_exists('foo', 'foo_insert');
+SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_keychg');
+
+INSERT INTO foo (foo_id, bar_id) VALUES (1, 1);
+VALUES (assert_equals(1::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date, date '9999-12-31', 1, 1)
+    ) AS t)));
+
+SELECT assert_raises('UTH01', 'UPDATE foo SET bar_id = 2 WHERE foo_id = 1 AND bar_id = 1');
+
+DELETE FROM foo WHERE foo_id = 1 AND bar_id = 1;
+VALUES (assert_equals(0::bigint, (SELECT count(*) FROM foo_history)));
+
+DROP TABLE foo_history;
+DROP TABLE foo;
+
