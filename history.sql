@@ -1529,7 +1529,7 @@ BEGIN
     FOR r IN
         SELECT format(
             $sql$
-            DROP TRIGGER %I ON %I
+            DROP TRIGGER %I ON %s
             $sql$,
 
             tgname, tgrelid::regclass
@@ -1550,8 +1550,6 @@ BEGIN
 
     -- Drop any existing functions with the same name as the destination
     -- trigger functions
-    -- XXX Surely this should be DROP FUNCTION %I - but that seems to fail as
-    -- it tries to include the () after the function name...
     FOR r IN
         SELECT format(
             $sql$
