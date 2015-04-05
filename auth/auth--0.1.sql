@@ -26,20 +26,8 @@
 -- transferred to other roles, removed entirely, or queried as a whole.
 -------------------------------------------------------------------------------
 
--- ROLES
--------------------------------------------------------------------------------
--- The following roles grant usage and administrative rights to the objects
--- created by this module.
--------------------------------------------------------------------------------
-
-DROP ROLE IF EXISTS utils_auth_user;
-DROP ROLE IF EXISTS utils_auth_admin;
-CREATE ROLE utils_auth_user;
-CREATE ROLE utils_auth_admin;
-
-GRANT utils_auth_user TO utils_user;
-GRANT utils_auth_user TO utils_auth_admin WITH ADMIN OPTION;
-GRANT utils_auth_admin TO utils_admin WITH ADMIN OPTION;
+-- Complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION auth" to load this file. \quit
 
 -- auths_held(auth_name)
 -------------------------------------------------------------------------------
@@ -205,7 +193,7 @@ COMMENT ON FUNCTION auth_diff(name, name)
 -- copied.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION x_copy_list(
+CREATE FUNCTION _copy_list(
     source name,
     dest name
 )
@@ -250,7 +238,7 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT ddl
-        FROM x_copy_list(source, dest)
+        FROM _copy_list(source, dest)
     LOOP
         EXECUTE r.ddl;
     END LOOP;
@@ -277,7 +265,7 @@ COMMENT ON FUNCTION copy_auth(name, name)
 -- Any such authorziations must be handled manually.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION x_remove_list(
+CREATE FUNCTION _remove_list(
     auth_name name
 )
     RETURNS TABLE (
@@ -324,7 +312,7 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT ddl
-        FROM x_remove_list(auth_name)
+        FROM _remove_list(auth_name)
     LOOP
         EXECUTE r.ddl;
     END LOOP;
@@ -405,6 +393,8 @@ GRANT ALL ON TABLE
 
 COMMENT ON TABLE saved_auths
     IS 'Utility table used for temporary storage of authorizations by save_auth, save_auths, restore_auth and restore_auths';
+
+SELECT pg_catalog.pg_extension_config_dump('saved_auths', '');
 
 -- save_auth(aschema, atable)
 -- save_auth(atable)

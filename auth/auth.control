@@ -1,0 +1,4 @@
+# auth utilities extension
+comment = 'utility routines for manipulating authorizations'
+default_version = '0.1'
+relocatable = true
