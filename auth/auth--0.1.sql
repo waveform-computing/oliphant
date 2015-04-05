@@ -97,14 +97,6 @@ AS $$
     SELECT * FROM table_auths;
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    auths_held(name)
-    TO utils_auth_user;
-
-GRANT ALL ON FUNCTION
-    auths_held(name)
-    TO utils_auth_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION auths_held(name)
     IS 'Utility table function which returns all the authorizations held by a specific name';
 
@@ -170,14 +162,6 @@ AS $$
     SELECT * FROM missing_diff UNION
     SELECT * FROM upgrade_diff;
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    auth_diff(name, name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    auth_diff(name, name)
-    TO utils_auth_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION auth_diff(name, name)
     IS 'Utility table function which returns the difference between the authorities held by two names';
@@ -245,14 +229,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    copy_auth(name, name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    copy_auth(name, name)
-    TO utils_auth_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION copy_auth(name, name)
     IS 'Grants all authorities held by the source to the target, provided they are not already held (i.e. does not "re-grant" authorities already held)';
 
@@ -319,14 +295,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    remove_auth(name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    remove_auth(name)
-    TO utils_auth_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION remove_auth(name)
     IS 'Removes all authorities held by the specified name';
 
@@ -354,14 +322,6 @@ AS $$
     SELECT remove_auth(source);
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    move_auth(name, name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    move_auth(name, name)
-    TO utils_auth_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION move_auth(name, name)
     IS 'Moves all authorities held by the source to the target, provided they are not already held';
 
@@ -382,14 +342,6 @@ CREATE UNIQUE INDEX saved_auths_pk
 ALTER TABLE saved_auths
     ADD PRIMARY KEY USING INDEX saved_auths_pk,
     ALTER COLUMN is_grantable SET NOT NULL;
-
-GRANT ALL ON TABLE
-    saved_auths
-    TO utils_auth_user;
-
-GRANT ALL ON TABLE
-    saved_auths
-    TO utils_auth_admin WITH GRANT OPTION;
 
 COMMENT ON TABLE saved_auths
     IS 'Utility table used for temporary storage of authorizations by save_auth, save_auths, restore_auth and restore_auths';
@@ -470,16 +422,6 @@ AS $$
     VALUES (save_auth(current_schema, atable));
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    save_auth(name, name),
-    save_auth(name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    save_auth(name, name),
-    save_auth(name)
-    TO utils_auth_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION save_auth(name, name)
     IS 'Saves the authorizations of the specified relation for later restoration with the RESTORE_AUTH procedure';
 COMMENT ON FUNCTION save_auth(name)
@@ -536,16 +478,6 @@ CREATE FUNCTION restore_auth(atable name)
 AS $$
     VALUES (restore_auth(current_schema, atable));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    restore_auth(name, name),
-    restore_auth(name)
-    TO utils_auth_user;
-
-GRANT EXECUTE ON FUNCTION
-    restore_auth(name, name),
-    restore_auth(name)
-    TO utils_auth_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION restore_auth(name, name)
     IS 'Restores authorizations previously saved by SAVE_AUTH for the specified table';

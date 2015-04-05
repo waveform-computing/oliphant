@@ -33,21 +33,8 @@
 -- history such as "what changed when" and "snapshots over constant periods".
 -------------------------------------------------------------------------------
 
-
--- ROLES
--------------------------------------------------------------------------------
--- The following roles grant usage and administrative rights to the objects
--- created by this module.
--------------------------------------------------------------------------------
-
-DROP ROLE IF EXISTS utils_history_user;
-DROP ROLE IF EXISTS utils_history_admin;
-CREATE ROLE utils_history_user;
-CREATE ROLE utils_history_admin;
-
-GRANT utils_history_user TO utils_user;
-GRANT utils_history_user TO utils_history_admin WITH ADMIN OPTION;
-GRANT utils_history_admin TO utils_admin WITH ADMIN OPTION;
+-- Complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION history" to load this file. \quit
 
 -- x_history_periodlen(resolution)
 -- x_history_periodstep(resolution)
@@ -1103,20 +1090,6 @@ AS $$
             source_table, source_table || '_history', resolution));
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    create_history_table(name, name, name, name, name, varchar),
-    create_history_table(name, name, name, varchar),
-    create_history_table(name, name, varchar),
-    create_history_table(name, varchar)
-    TO utils_history_user;
-
-GRANT ALL ON FUNCTION
-    create_history_table(name, name, name, name, name, varchar),
-    create_history_table(name, name, name, varchar),
-    create_history_table(name, name, varchar),
-    create_history_table(name, varchar)
-    TO utils_history_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, name, name, name, name, varchar)
     IS 'Creates a temporal history table based on the structure of the specified table';
 COMMENT ON FUNCTION CREATE_HISTORY_TABLE(name, name, name, varchar)
@@ -1282,18 +1255,6 @@ AS $$
         ));
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    create_history_changes(name, name, name, name),
-    create_history_changes(name, name),
-    create_history_changes(name)
-    TO utils_history_user;
-
-GRANT ALL ON FUNCTION
-    create_history_changes(name, name, name, name),
-    create_history_changes(name, name),
-    create_history_changes(name)
-    TO utils_history_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION create_history_changes(name, name, name, name)
     IS 'Creates an "OLD vs NEW" changes view on top of the specified history table';
 COMMENT ON FUNCTION create_history_changes(name, name)
@@ -1442,18 +1403,6 @@ AS $$
             source_table, replace(source_table, '_history', '_by_' || resolution), resolution
         ));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    create_history_snapshots(name, name, name, name, varchar),
-    create_history_snapshots(name, name, varchar),
-    create_history_snapshots(name, varchar)
-    TO utils_history_user;
-
-GRANT EXECUTE ON FUNCTION
-    create_history_snapshots(name, name, name, name, varchar),
-    create_history_snapshots(name, name, varchar),
-    create_history_snapshots(name, varchar)
-    TO utils_history_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION create_history_snapshots(name, name, name, name, varchar)
     IS 'Creates an exploded view of the specified history table with one row per entity per resolution time-slice (e.g. daily, monthly, yearly, etc.)';
@@ -1832,20 +1781,6 @@ AS $$
             source_table, source_table || '_history', resolution, interval '0 microseconds'
         ));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    create_history_triggers(name, name, name, name, varchar, interval),
-    create_history_triggers(name, name, varchar, interval),
-    create_history_triggers(name, varchar, interval),
-    create_history_triggers(name, varchar)
-    TO utils_history_user;
-
-GRANT EXECUTE ON FUNCTION
-    create_history_triggers(name, name, name, name, varchar, interval),
-    create_history_triggers(name, name, varchar, interval),
-    create_history_triggers(name, varchar, interval),
-    create_history_triggers(name, varchar)
-    TO utils_history_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION create_history_triggers(name, name, name, name, varchar, interval)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
