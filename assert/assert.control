@@ -1,0 +1,4 @@
+# assertion framework
+comment = 'assertion functions for tests'
+default_version = '0.1'
+relocatable = true

@@ -22,20 +22,8 @@
 -- IN THE SOFTWARE.
 -------------------------------------------------------------------------------
 
--- ROLES
--------------------------------------------------------------------------------
--- The following roles grant usage and administrative rights to the objects
--- created by this module.
--------------------------------------------------------------------------------
-
-DROP ROLE IF EXISTS utils_assert_user;
-DROP ROLE IF EXISTS utils_assert_admin;
-CREATE ROLE utils_assert_user;
-CREATE ROLE utils_assert_admin;
-
-GRANT utils_assert_user TO utils_user;
-GRANT utils_assert_user TO utils_assert_admin WITH ADMIN OPTION;
-GRANT utils_assert_admin TO utils_admin WITH ADMIN OPTION;
+-- Complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION assert" to load this file. \quit
 
 -- assert_raises(state, sql)
 -------------------------------------------------------------------------------
@@ -59,26 +47,17 @@ BEGIN
             END IF;
             RAISE EXCEPTION USING
                 ERRCODE = 'UTA01',
-                MESSAGE =
-                    LEFT(sql, 80) || CASE WHEN length(sql) > 80 THEN '...' ELSE '' END
-                    || ' signalled SQLSTATE ' || SQLSTATE
-                    || ' instead of ' || state;
+                MESSAGE = format('%s signalled SQLSTATE %s instead of %s',
+                    LEFT(sql, 80) || CASE WHEN length(sql) > 80 THEN '...' ELSE '' END,
+                    SQLSTATE, state);
     END;
     RAISE EXCEPTION USING
         ERRCODE = 'UTA01',
-        MESSAGE =
-            LEFT(sql, 80) || CASE WHEN length(sql) > 80 THEN '...' ELSE '' END
-            || ' did not signal SQLSTATE ' || state;
+        MESSAGE = format('%s did not signal SQLSTATE %s',
+            LEFT(sql, 80) || CASE WHEN length(sql) > 80 THEN '...' ELSE '' END,
+            state);
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_raises(char, text)
-    TO utils_assert_user;
-
-GRANT ALL ON FUNCTION
-    assert_raises(char, text)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_raises(char, text)
     IS 'Raises an exception if the execution of sql doesn''t signal SQLSTATE state, or signals a different SQLSTATE';
@@ -97,22 +76,12 @@ CREATE FUNCTION assert_table_exists(aschema name, atable name)
     STABLE
 AS $$
 BEGIN
-    IF (
-        SELECT COUNT(*)
-        FROM pg_catalog.pg_class
-        WHERE
-            oid = table_oid(aschema, atable)
-            AND relkind IN ('r', 'v', 'm', 'f')
-        ) = 0 THEN
-        RAISE EXCEPTION USING
-            ERRCODE = 'UTA02',
-            MESSAGE = quote_ident(aschema) || '.' || quote_ident(atable) || ' does not exist';
-    END IF;
+    PERFORM (quote_ident(aschema) || '.' || quote_ident(atable))::regclass;
 EXCEPTION
     WHEN undefined_table THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA02',
-            MESSAGE = quote_ident(aschema) || '.' || quote_ident(atable) || ' does not exist';
+            MESSAGE = format('Table %I.%I does not exist', aschema, atable);
 END;
 $$;
 
@@ -123,16 +92,6 @@ CREATE FUNCTION assert_table_exists(atable name)
 AS $$
     VALUES (assert_table_exists(current_schema, atable));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_table_exists(name, name),
-    assert_table_exists(name)
-    TO utils_assert_user;
-
-GRANT ALL ON FUNCTION
-    assert_table_exists(name, name),
-    assert_table_exists(name)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_table_exists(name, name)
     IS 'Raises an exception if the specified table does not exist';
@@ -152,27 +111,24 @@ CREATE FUNCTION assert_column_exists(aschema name, atable name, acolumn name)
     LANGUAGE plpgsql
     STABLE
 AS $$
+DECLARE
+    source_oid oid;
 BEGIN
-    IF (
-        SELECT COUNT(*)
-        FROM
-            pg_catalog.pg_class c
-            JOIN pg_catalog.pg_attribute a
-                ON a.attrelid = c.oid
-        WHERE
-            c.oid = table_oid(aschema, atable)
-            AND c.relkind IN ('r', 'v', 'm', 'f')
-            AND a.attname = acolumn
-        ) = 0 THEN
+    source_oid := (quote_ident(aschema) || '.' || quote_ident(atable))::regclass;
+    IF EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE attrelid = source_oid AND attname = acolumn
+        ) THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA03',
-            MESSAGE = quote_ident(acolumn) || ' does not exist in table ' || quote_ident(aschema) || '.' || quote_ident(atable);
+            MESSAGE = format('Column %I.%I.%I does not exist', aschema, atable, acolumn);
     END IF;
 EXCEPTION
     WHEN undefined_table THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA02',
-            MESSAGE = quote_ident(aschema) || '.' || quote_ident(atable) || ' does not exist';
+            MESSAGE = format('Table %I.%I does not exist', aschema, atable);
 END;
 $$;
 
@@ -183,16 +139,6 @@ CREATE FUNCTION assert_column_exists(atable name, acolumn name)
 AS $$
     VALUES (assert_column_exists(current_schema, atable, acolumn));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_column_exists(name, name, name),
-    assert_column_exists(name, name)
-    TO utils_assert_user;
-
-GRANT ALL ON FUNCTION
-    assert_column_exists(name, name, name),
-    assert_column_exists(name, name)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_column_exists(name, name, name)
     IS 'Raises an exception if the specified column does not exist';
@@ -212,27 +158,24 @@ CREATE FUNCTION assert_trigger_exists(aschema name, atable name, atrigger name)
     LANGUAGE plpgsql
     STABLE
 AS $$
+DECLARE
+    source_oid oid;
 BEGIN
-    IF (
-        SELECT COUNT(*)
-        FROM
-            pg_catalog.pg_class c
-            JOIN pg_catalog.pg_trigger t
-                ON t.tgrelid = c.oid
-        WHERE
-            c.oid = table_oid(aschema, atable)
-            AND c.relkind IN ('r', 'v', 'm', 'f')
-            AND t.tgname = atrigger
-        ) = 0 THEN
+    source_oid := (quote_ident(aschema) || '.' || quote_ident(atable))::regclass;
+    IF EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_trigger
+            WHERE oid = source_oid AND tgname = atrigger
+        ) THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA04',
-            MESSAGE = quote_ident(atrigger) || ' does not exist on table ' || quote_ident(aschema) || '.' || quote_ident(atable);
+            MESSAGE = format('Trigger %I does not exist on table %I.%I', atrigger, aschema, atable);
     END IF;
 EXCEPTION
     WHEN undefined_table THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA02',
-            MESSAGE = quote_ident(aschema) || '.' || quote_ident(atable) || ' does not exist';
+            MESSAGE = format('Table %I.%I does not exist', aschema, atable);
 END;
 $$;
 
@@ -243,16 +186,6 @@ CREATE FUNCTION assert_trigger_exists(atable name, atrigger name)
 AS $$
     VALUES (assert_trigger_exists(current_schema, atable, atrigger));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_trigger_exists(name, name, name),
-    assert_trigger_exists(name, name)
-    TO utils_assert_user;
-
-GRANT ALL ON FUNCTION
-    assert_trigger_exists(name, name, name),
-    assert_trigger_exists(name, name)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_trigger_exists(name, name, name)
     IS 'Raises an exception if the specified trigger does not exist';
@@ -273,12 +206,15 @@ CREATE FUNCTION assert_function_exists(aschema name, afunction name, argtypes na
     STABLE
 AS $$
 BEGIN
-    PERFORM (function_oid(aschema, afunction, argtypes));
+    PERFORM (
+        quote_ident(aschema) || '.' || quote_ident(afunction) ||
+            '(' || array_to_string(argtypes, ',') || ')')::regprocedure;
 EXCEPTION
     WHEN undefined_function THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA05',
-            MESSAGE = quote_ident(aschema) || '.' || quote_ident(afunction) || '(' || array_to_string(argtypes, ',') || ') does not exist';
+            MESSAGE = format('Function %I.%I(%s) does not exist',
+                aschema, afunction, array_to_string(argtypes, ','));
 END;
 $$;
 
@@ -289,16 +225,6 @@ CREATE FUNCTION assert_function_exists(afunction name, argtypes name[])
 AS $$
     VALUES (assert_function_exists(current_schema, afunction, argtypes));
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_function_exists(name, name, name[]),
-    assert_function_exists(name, name[])
-    TO utils_assert_user;
-
-GRANT ALL ON FUNCTION
-    assert_function_exists(name, name, name[]),
-    assert_function_exists(name, name[])
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_function_exists(name, name, name[])
     IS 'Raises an exception if the specified function does not exist';
@@ -339,16 +265,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    assert_is_null(anyelement),
-    assert_is_null(text)
-    TO utils_assert_user;
-
-GRANT EXECUTE ON FUNCTION
-    assert_is_null(anyelement),
-    assert_is_null(text)
-    TO utils_assert_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION assert_is_null(anyelement)
     IS 'Raises an exception if the specified value is not NULL';
 COMMENT ON FUNCTION assert_is_null(text)
@@ -387,16 +303,6 @@ BEGIN
     END IF;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_is_not_null(anyelement),
-    assert_is_not_null(text)
-    TO utils_assert_user;
-
-GRANT EXECUTE ON FUNCTION
-    assert_is_not_null(anyelement),
-    assert_is_not_null(text)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_is_not_null(anyelement)
     IS 'Raises an exception if the specified value is NULL';
@@ -437,16 +343,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION
-    assert_equals(anyelement, anyelement),
-    assert_equals(text, text)
-    TO utils_assert_user;
-
-GRANT EXECUTE ON FUNCTION
-    assert_equals(anyelement, anyelement),
-    assert_equals(text, text)
-    TO utils_assert_admin WITH GRANT OPTION;
-
 COMMENT ON FUNCTION assert_equals(anyelement, anyelement)
     IS 'Raises an exception if a does not equal b';
 COMMENT ON FUNCTION assert_equals(text, text)
@@ -485,16 +381,6 @@ BEGIN
     END IF;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    assert_not_equals(anyelement, anyelement),
-    assert_not_equals(text, text)
-    TO utils_assert_user;
-
-GRANT EXECUTE ON FUNCTION
-    assert_not_equals(anyelement, anyelement),
-    assert_not_equals(text, text)
-    TO utils_assert_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION assert_not_equals(anyelement, anyelement)
     IS 'Raises an exception if a equals b';
