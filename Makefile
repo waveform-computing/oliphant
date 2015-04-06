@@ -1,60 +1,34 @@
-DBNAME:=ark
-SCHEMANAME:=utils
+DBNAME:=$(USER)
 
-VERSION:=0.1
-ALL_EXT:=
-ALL_SQL:=assert.sql auth.sql history.sql utils.sql merge.sql
-ALL_FOO:=$(ALL_SQL:%.sql=%.foo)
+install:
+	$(MAKE) -C assert install
+	$(MAKE) -C auth install
+	$(MAKE) -C history install
+	$(MAKE) -C merge install
 
-install: install.sql
-	psql -1 -d $(DBNAME) -f $<
+installdb:
+	psql -d $(DBNAME) -c "CREATE EXTENSION assert"
+	psql -d $(DBNAME) -c "CREATE EXTENSION auth"
+	psql -d $(DBNAME) -c "CREATE EXTENSION history"
+	psql -d $(DBNAME) -c "CREATE EXTENSION merge"
 
-uninstall: uninstall.sql
-	psql -d $(DBNAME) -f $<
+uninstalldb:
+	psql -d $(DBNAME) -c "DROP EXTENSION merge"
+	psql -d $(DBNAME) -c "DROP EXTENSION history"
+	psql -d $(DBNAME) -c "DROP EXTENSION auth"
+	psql -d $(DBNAME) -c "DROP EXTENSION assert"
+
+uninstall:
+	$(MAKE) -C assert uninstall
+	$(MAKE) -C auth uninstall
+	$(MAKE) -C history uninstall
+	$(MAKE) -C merge uninstall
 
 doc:
 	$(MAKE) -C docs html
 
 test:
-	$(MAKE) -C tests test DBNAME=$(DBNAME) SCHEMANAME=$(SCHEMANAME)
+	$(MAKE) -C tests test DBNAME=$(DBNAME)
 
-clean: $(SUBDIRS)
-	#$(MAKE) -C docs clean
-	$(MAKE) -C tests clean
-	rm -f foo
-	rm -f *.foo
-	rm -f install.sql
-	rm -f uninstall.sql
-	rm -fr build/ dist/
-
-%.foo: %.sql
-	sed -e 's/%SCHEMANAME%/$(SCHEMANAME)/' $< >> foo
-	touch $@
-
-install.sql: $(ALL_FOO)
-	echo "\c $(DBNAME)" > $@
-	cat foo >> $@
-	echo "REVOKE ALL ON ALL TABLES IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
-	echo "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA $(SCHEMANAME) FROM public;" >> $@
-	rm foo
-	rm -f *.foo
-
-uninstall.sql: install.sql
-	echo "\c $(DBNAME)" > $@
-	echo "SET search_path TO $(SCHEMANAME), public;" >> $@
-	awk -f uninstall.awk $< >> $@
-
-assert.foo: utils.foo
-
-#date_time.foo: utils.foo assert.foo
-
-#evolve.foo: utils.foo sql.foo auth.foo
-
-auth.foo: utils.foo
-
-merge.foo: utils.foo assert.foo
-
-history.foo: utils.foo auth.foo assert.foo
-
-.PHONY: install uninstall doc clean test
+.PHONY: install uninstall doc test
 
