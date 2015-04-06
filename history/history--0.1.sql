@@ -750,7 +750,7 @@ AS $$
 DECLARE
     key_name name DEFAULT '';
     key_cols text DEFAULT '';
-    source_oid oid;
+    source_oid regclass;
     r record;
 BEGIN
     source_oid := (
@@ -1094,7 +1094,7 @@ CREATE FUNCTION create_history_changes(
     VOLATILE
 AS $$
 DECLARE
-    source_oid oid;
+    source_oid regclass;
     r record;
 BEGIN
     source_oid := (
@@ -1260,7 +1260,7 @@ CREATE FUNCTION create_history_snapshots(
     VOLATILE
 AS $$
 DECLARE
-    source_oid oid;
+    source_oid regclass;
     r record;
 BEGIN
     source_oid := (
@@ -1415,8 +1415,8 @@ CREATE FUNCTION create_history_triggers(
     VOLATILE
 AS $$
 DECLARE
-    source_oid oid;
-    dest_oid oid;
+    source_oid regclass;
+    dest_oid regclass;
     r record;
     all_keys boolean;
 BEGIN
@@ -1464,8 +1464,7 @@ BEGIN
 
         source_schema, source_table || '_keychg',
         'UTH01', format('Cannot update unique key of a row in %I.%I',
-            source_schema, source_table),
-        table_oid(source_schema, source_table)
+            source_schema, source_table), source_oid
     );
     EXECUTE format(
         $sql$
@@ -1700,5 +1699,61 @@ COMMENT ON FUNCTION create_history_triggers(name, varchar, interval)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
 COMMENT ON FUNCTION create_history_triggers(name, varchar)
     IS 'Creates the triggers to link the specified table to its corresponding history table';
+
+-- drop_history_triggers(source_schema, source_table)
+-- drop_history_triggers(source_table)
+-------------------------------------------------------------------------------
+-- Removes all existing history triggers (and their implementing functions)
+-- from the specified table. If the triggers or any of the functions do not
+-- exist, no errors are raised. If source_schema is not specified it defaults
+-- to the current schema.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION drop_history_triggers(source_schema name, source_table name)
+    RETURNS void
+    LANGUAGE plpgsql
+    VOLATILE
+AS $$
+DECLARE
+    r record;
+BEGIN
+    FOR r IN
+        SELECT
+            suffix
+        FROM (
+            VALUES ('keychg'), ('insert'), ('update'), ('delete')
+        ) AS t(suffix)
+    LOOP
+        EXECUTE format(
+            $sql$
+            DROP TRIGGER IF EXISTS %I ON %I.%I
+            $sql$,
+
+            source_table || '_' || r.suffix,
+            source_schema, source_table
+        );
+        EXECUTE format(
+            $sql$
+            DROP FUNCTION IF EXISTS %I.%I()
+            $sql$,
+
+            source_schema, source_table || '_' || r.suffix
+        );
+    END LOOP;
+END;
+$$;
+
+CREATE FUNCTION drop_history_triggers(source_table name)
+    RETURNS void
+    LANGUAGE SQL
+    VOLATILE
+AS $$
+    VALUES (drop_history_triggers(current_schema, source_table));
+$$;
+
+COMMENT ON FUNCTION drop_history_triggers(name, name)
+    IS 'Drops the triggers that link the specified table to its corresponding history table';
+COMMENT ON FUNCTION drop_history_triggers(name)
+    IS 'Drops the triggers that link the specified table to its corresponding history table';
 
 -- vim: set et sw=4 sts=4:

@@ -164,10 +164,7 @@ SELECT assert_raises('UTH01', 'UPDATE foo SET id = 4 WHERE id = 2');
 
 DROP VIEW foo_changes;
 DROP TABLE foo_history;
-DROP TRIGGER foo_delete ON foo;
-DROP TRIGGER foo_update ON foo;
-DROP TRIGGER foo_insert ON foo;
-DROP TRIGGER foo_keychg ON foo;
+SELECT drop_history_triggers('foo');
 DELETE FROM foo;
 
 -- Test microsecond resolution
@@ -274,11 +271,8 @@ VALUES (assert_equals(4::bigint, (
     ) AS t)));
 
 DROP VIEW foo_changes;
+SELECT drop_history_triggers('foo');
 DROP TABLE foo_history;
-DROP TRIGGER foo_delete ON foo;
-DROP TRIGGER foo_update ON foo;
-DROP TRIGGER foo_insert ON foo;
-DROP TRIGGER foo_keychg ON foo;
 
 SELECT create_history_table('foo', 'week');
 SELECT assert_table_exists('foo_history');
@@ -317,7 +311,7 @@ VALUES (assert_equals(1::bigint, (
             (date_trunc('week', current_date) - interval '7 days', date '9999-12-31', 1, 1)
     ) AS t)));
 
-
+SELECT drop_history_triggers('foo');
 DROP TABLE foo_history;
 DROP TABLE foo;
 
@@ -370,6 +364,7 @@ SELECT assert_raises('UTH01', 'UPDATE foo SET bar_id = 2 WHERE foo_id = 1 AND ba
 DELETE FROM foo WHERE foo_id = 1 AND bar_id = 1;
 VALUES (assert_equals(0::bigint, (SELECT count(*) FROM foo_history)));
 
+SELECT drop_history_triggers('foo');
 DROP TABLE foo_history;
 DROP TABLE foo;
 
