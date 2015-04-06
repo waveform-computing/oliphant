@@ -99,4 +99,6 @@ DROP TABLE foo;
 DROP ROLE bar_role;
 DROP ROLE foo_role;
 
+-- XXX Add tests for function grants
+
 -- vim: set et sw=4 sts=4:

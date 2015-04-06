@@ -65,6 +65,7 @@ AS $$
             pg_catalog.pg_roles
         WHERE
             pg_has_role(auth_name, rolname, 'USAGE')
+            AND auth_name <> rolname
     ),
     table_auths AS (
         SELECT
@@ -92,6 +93,7 @@ AS $$
         WHERE
             grantee = auth_name
     )
+    -- XXX Need to add more stuff in here (tablespaces, etc.)
     SELECT * FROM role_auths                 UNION
     SELECT * FROM routine_auths              UNION
     SELECT * FROM table_auths;
