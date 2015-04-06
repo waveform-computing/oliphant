@@ -112,10 +112,10 @@ CREATE FUNCTION assert_column_exists(aschema name, atable name, acolumn name)
     STABLE
 AS $$
 DECLARE
-    source_oid oid;
+    source_oid regclass;
 BEGIN
     source_oid := (quote_ident(aschema) || '.' || quote_ident(atable))::regclass;
-    IF EXISTS (
+    IF NOT EXISTS (
             SELECT 1
             FROM pg_catalog.pg_attribute
             WHERE attrelid = source_oid AND attname = acolumn
@@ -159,13 +159,13 @@ CREATE FUNCTION assert_trigger_exists(aschema name, atable name, atrigger name)
     STABLE
 AS $$
 DECLARE
-    source_oid oid;
+    source_oid regclass;
 BEGIN
     source_oid := (quote_ident(aschema) || '.' || quote_ident(atable))::regclass;
-    IF EXISTS (
+    IF NOT EXISTS (
             SELECT 1
             FROM pg_catalog.pg_trigger
-            WHERE oid = source_oid AND tgname = atrigger
+            WHERE tgrelid = source_oid AND tgname = atrigger
         ) THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTA04',
