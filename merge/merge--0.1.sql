@@ -26,37 +26,20 @@
 -- structured destination table.
 -------------------------------------------------------------------------------
 
--- ROLES
--------------------------------------------------------------------------------
--- The following roles grant usage and administrative rights to the objects
--- created by this module.
--------------------------------------------------------------------------------
+-- Complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION merge" to load this file. \quit
 
-DROP ROLE IF EXISTS utils_merge_user;
-DROP ROLE IF EXISTS utils_merge_admin;
-CREATE ROLE utils_merge_user;
-CREATE ROLE utils_merge_admin;
-
-GRANT utils_merge_user TO utils_user;
-GRANT utils_merge_user TO utils_merge_admin WITH ADMIN OPTION;
-GRANT utils_merge_admin TO utils_admin WITH ADMIN OPTION;
-
--- x_build_insert(source_schema, source_table, dest_schema, dest_table)
--- x_build_merge(source_schema, source_table, dest_schema, dest_table, dest_key)
--- x_build_delete(source_schema, source_table, dest_schema, dest_table, dest_key)
--- x_merge_checks(source_schema, source_table, dest_schema, dest_table, dest_key)
+-- _build_insert(source_schema, source_table, dest_schema, dest_table)
+-- _build_merge(source_schema, source_table, dest_schema, dest_table, dest_key)
+-- _build_delete(source_schema, source_table, dest_schema, dest_table, dest_key)
+-- _merge_checks(source_schema, source_table, dest_schema, dest_table, dest_key)
 -------------------------------------------------------------------------------
 -- These functions are effectively private utility subroutines for the
 -- procedures defined below. They simply generate snippets of SQL given a set
 -- of input parameters.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION x_build_insert(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name
-)
+CREATE FUNCTION _build_insert(source_oid oid, dest_oid oid)
     RETURNS text
     LANGUAGE plpgsql
     STABLE
@@ -73,29 +56,27 @@ BEGIN
             JOIN pg_catalog.pg_attribute t
                 ON s.attname = t.attname
         WHERE
-            s.attrelid = table_oid(source_schema, source_table)
-            AND t.attrelid = table_oid(dest_schema, dest_table)
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
             AND t.attnum > 0
+            AND NOT t.attisdropped
     LOOP
         cols := cols || ',' || quote_ident(r.attname);
     END LOOP;
     cols := substring(cols from 2);
 
-    RETURN
-        'INSERT INTO ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
-        || '(' || cols || ') '
-        || 'SELECT ' || cols || ' '
-        || 'FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table);
+    RETURN format(
+        $sql$
+        INSERT INTO %s (%s) SELECT %s FROM %s
+        $sql$,
+
+        dest_oid::regclass, cols,
+        cols, source_oid::regclass
+    );
 END;
 $$;
 
-CREATE FUNCTION x_build_update(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name,
-    dest_key name
-)
+CREATE FUNCTION _build_update(source_oid oid, dest_oid oid, dest_key name)
     RETURNS text
     LANGUAGE plpgsql
     STABLE
@@ -117,37 +98,40 @@ BEGIN
             JOIN pg_catalog.pg_constraint c
                 ON c.conrelid = t.attrelid
         WHERE
-            s.attrelid = table_oid(source_schema, source_table)
-            AND t.attrelid = table_oid(dest_schema, dest_table)
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
             AND t.attnum > 0
+            AND NOT t.attisdropped
             AND c.contype IN ('p', 'u')
             -- XXX what about connamespace?
             AND c.conname = dest_key
     LOOP
         IF r.iskey THEN
-            where_cols := where_cols || ' AND src.' || quote_ident(r.attname) || ' = dest.' || quote_ident(r.attname);
-            return_cols := return_cols || ',src.' || quote_ident(r.attname);
+            where_cols := where_cols || format(' AND src.%I = dest.%I', r.attname, r.attname);
+            return_cols := return_cols || format(',src.%I', r.attname);
         ELSE
-            set_cols := set_cols || ',' || quote_ident(r.attname) || ' = src.' || quote_ident(r.attname);
+            set_cols := set_cols || format(',%I = src.%I', r.attname, r.attname);
         END IF;
     END LOOP;
+    set_cols := substring(set_cols from 2);
+    where_cols := substring(where_cols from 6);
+    return_cols := substring(return_cols from 2);
 
-    RETURN
-        'UPDATE ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' AS dest '
-        || 'SET ' || substring(set_cols from 2) || ' '
-        || 'FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table) || ' AS src '
-        || 'WHERE ' || substring(where_cols from 6) || ' '
-        || 'RETURNING ' || substring(return_cols from 2);
+    RETURN format(
+        $sql$
+        UPDATE %s AS dest SET %s
+        FROM %s AS src WHERE %s
+        RETURNING %s
+        $sql$,
+
+        dest_oid::regclass, set_cols,
+        source_oid::regclass, where_cols,
+        return_cols
+    );
 END;
 $$;
 
-CREATE FUNCTION x_build_delete(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name,
-    dest_key name
-)
+CREATE FUNCTION _build_delete(source_oid oid, dest_oid oid, dest_key name)
     RETURNS text
     LANGUAGE plpgsql
     STABLE
@@ -164,36 +148,35 @@ BEGIN
             JOIN pg_catalog.pg_constraint c
                 ON c.conrelid = t.attrelid
         WHERE
-            t.attrelid = table_oid(dest_schema, dest_table)
+            t.attrelid = dest_oid
             AND t.attnum > 0
+            AND NOT t.attisdropped
             AND c.contype IN ('p', 'u')
             -- XXX what about connamespace?
             AND c.conname = dest_key
             AND ARRAY [t.attnum] <@ c.conkey
     LOOP
-        key_cols := key_cols || ',' || quote_ident(r.attname);
+        key_cols := key_cols || format(',%I', r.attname);
     END LOOP;
     key_cols := substring(key_cols from 2);
 
-    RETURN
-        'DELETE FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
-        || 'WHERE ROW (' || key_cols || ') IN ('
-        || 'SELECT ' || key_cols || ' '
-        || 'FROM ' || quote_ident(dest_schema) || '.' || quote_ident(dest_table) || ' '
-        || 'EXCEPT '
-        || 'SELECT ' || key_cols || ' '
-        || 'FROM ' || quote_ident(source_schema) || '.' || quote_ident(source_table)
-        || ')';
+    RETURN format(
+        $sql$
+        DELETE FROM %s WHERE ROW (%s) IN (
+            SELECT %s FROM %s
+            EXCEPT
+            SELECT %s FROM %s
+        )
+        $sql$,
+
+        dest_oid::regclass, key_cols,
+        key_cols, dest_oid::regclass,
+        key_cols, source_oid::regclass
+    );
 END;
 $$;
 
-CREATE FUNCTION x_build_merge(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name,
-    dest_key name
-)
+CREATE FUNCTION _build_merge(source_oid oid, dest_oid oid, dest_key name)
     RETURNS text
     LANGUAGE plpgsql
     STABLE
@@ -210,59 +193,52 @@ BEGIN
             JOIN pg_catalog.pg_constraint c
                 ON c.conrelid = t.attrelid
         WHERE
-            t.attrelid = table_oid(dest_schema, dest_table)
+            t.attrelid = dest_oid
             AND t.attnum > 0
+            AND NOT t.attisdropped
             AND c.contype IN ('p', 'u')
             -- XXX what about connamespace?
             AND c.conname = dest_key
             AND ARRAY [t.attnum] <@ c.conkey
     LOOP
-        key_cols := key_cols || ',' || quote_ident(r.attname);
+        key_cols := key_cols || format(',%I', r.attname);
     END LOOP;
     key_cols := substring(key_cols from 2);
 
-    RETURN
-        'WITH upsert AS ('
-        || x_build_update(source_schema, source_table, dest_schema, dest_table, dest_key)
-        || ')'
-        || x_build_insert(source_schema, source_table, dest_schema, dest_table) || ' '
-        || 'WHERE ROW (' || key_cols || ') NOT IN ('
-        ||     'SELECT ' || key_cols || ' '
-        ||     'FROM upsert'
-        || ')';
+    RETURN format(
+        $sql$
+        WITH upsert AS (
+            %s
+        )
+        %s WHERE ROW (%s) NOT IN (
+            SELECT %s
+            FROM upsert
+        )
+        $sql$,
+
+        _build_update(source_oid, dest_oid, dest_key),
+        _build_insert(source_oid, dest_oid),
+        key_cols, key_cols
+    );
 END;
 $$;
 
-CREATE FUNCTION x_insert_checks(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name
-)
+CREATE FUNCTION _insert_checks(source_oid oid, dest_oid oid)
     RETURNS void
     LANGUAGE plpgsql
     STABLE
 AS $$
 BEGIN
-    PERFORM assert_table_exists(source_schema, source_table);
-    PERFORM assert_table_exists(dest_schema, dest_table);
-
-    IF table_oid(source_schema, source_table) = table_oid(dest_schema, dest_table) THEN
+    IF source_oid = dest_oid THEN
         RAISE EXCEPTION USING
             ERRCODE = 'UTM01',
             MESSAGE = 'Source and destination tables cannot be the same',
-            TABLE = table_oid(source_schema, source_table);
+            TABLE = source_oid;
     END IF;
 END;
 $$;
 
-CREATE FUNCTION x_merge_checks(
-    source_schema name,
-    source_table name,
-    dest_schema name,
-    dest_table name,
-    dest_key name
-)
+CREATE FUNCTION _merge_checks(source_oid oid, dest_oid oid, dest_key name)
     RETURNS void
     LANGUAGE plpgsql
     STABLE
@@ -270,7 +246,7 @@ AS $$
 DECLARE
     r record;
 BEGIN
-    PERFORM x_insert_checks(source_schema, source_table, dest_schema, dest_table);
+    PERFORM _insert_checks(source_oid, dest_oid);
 
     FOR r IN
         SELECT
@@ -282,9 +258,10 @@ BEGIN
             LEFT JOIN pg_catalog.pg_attribute s
                 ON s.attname = t.attname
         WHERE
-            s.attrelid = table_oid(source_schema, source_table)
-            AND t.attrelid = table_oid(dest_schema, dest_table)
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
             AND t.attnum > 0
+            AND NOT t.attisdropped
             AND c.contype IN ('p', 'u')
             -- XXX what about connamespace?
             AND c.conname = dest_key
@@ -293,8 +270,9 @@ BEGIN
     LOOP
         RAISE EXCEPTION USING
             ERRCODE = 'UTM02',
-            MESSAGE = 'All fields of constraint ' || dest_key || ' must exist in the source and target tables',
-            TABLE = table_oid(dest_schema, dest_table);
+            MESSAGE = format(
+                'All fields of constraint %I must exist in the source and target tables', dest_key),
+            TABLE = dest_oid;
     END LOOP;
 END;
 $$;
@@ -320,32 +298,30 @@ CREATE FUNCTION auto_insert(
     LANGUAGE plpgsql
     VOLATILE
 AS $$
+DECLARE
+    source_oid regclass;
+    dest_oid regclass;
 BEGIN
-    PERFORM x_insert_checks(source_schema, source_table, dest_schema, dest_table);
-    EXECUTE x_build_insert(source_schema, source_table, dest_schema, dest_table);
+    source_oid := (
+        quote_ident(source_schema) || '.' || quote_ident(source_table)
+    )::regclass;
+
+    dest_oid := (
+        quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+    )::regclass;
+
+    PERFORM _insert_checks(source_oid, dest_oid);
+    EXECUTE _build_insert(source_oid, dest_oid);
 END;
 $$;
 
-CREATE FUNCTION auto_insert(
-    source_table name,
-    dest_table name
-)
+CREATE FUNCTION auto_insert(source_table name, dest_table name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
     SELECT auto_insert(current_schema, source_table, current_schema, dest_table);
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    auto_insert(name, name, name, name),
-    auto_insert(name, name)
-    TO utils_merge_user;
-
-GRANT EXECUTE ON FUNCTION
-    auto_insert(name, name, name, name),
-    auto_insert(name, name)
-    TO utils_merge_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION auto_insert(name, name, name, name)
     IS 'Automatically inserts data from source_table into dest_table';
@@ -382,9 +358,20 @@ CREATE FUNCTION auto_merge(
     LANGUAGE plpgsql
     VOLATILE
 AS $$
+DECLARE
+    source_oid regclass;
+    dest_oid regclass;
 BEGIN
-    PERFORM x_merge_checks(source_schema, source_table, dest_schema, dest_table, dest_key);
-    EXECUTE x_build_merge(source_schema, source_table, dest_schema, dest_table, dest_key);
+    source_oid := (
+        quote_ident(source_schema) || '.' || quote_ident(source_table)
+    )::regclass;
+
+    dest_oid := (
+        quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+    )::regclass;
+
+    PERFORM _merge_checks(source_oid, dest_oid, dest_key);
+    EXECUTE _build_merge(source_oid, dest_oid, dest_key);
 END;
 $$;
 
@@ -401,7 +388,7 @@ AS $$
     SELECT auto_merge(source_schema, source_table, dest_schema, dest_table, (
             SELECT conname
             FROM pg_catalog.pg_constraint
-            WHERE conrelid = table_oid(dest_schema, dest_table)
+            WHERE conrelid = (quote_ident(dest_schema) || '.' || quote_ident(dest_table))::regclass
             AND contype = 'p'
         ));
 $$;
@@ -428,20 +415,6 @@ CREATE FUNCTION auto_merge(
 AS $$
     SELECT auto_merge(current_schema, source_table, current_schema, dest_table);
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    auto_merge(name, name, name, name, name),
-    auto_merge(name, name, name, name),
-    auto_merge(name, name, name),
-    auto_merge(name, name)
-    TO utils_merge_user;
-
-GRANT EXECUTE ON FUNCTION
-    auto_merge(name, name, name, name, name),
-    auto_merge(name, name, name, name),
-    auto_merge(name, name, name),
-    auto_merge(name, name)
-    TO utils_merge_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION auto_merge(name, name, name, name, name)
     IS 'Automatically inserts/updates ("upserts") data from source_table into dest_table based on dest_key';
@@ -482,9 +455,20 @@ CREATE FUNCTION auto_delete(
     LANGUAGE plpgsql
     VOLATILE
 AS $$
+DECLARE
+    source_oid regclass;
+    dest_oid regclass;
 BEGIN
-    PERFORM x_merge_checks(source_schema, source_table, dest_schema, dest_table, dest_key);
-    EXECUTE x_build_delete(source_schema, source_table, dest_schema, dest_table, dest_key);
+    source_oid := (
+        quote_ident(source_schema) || '.' || quote_ident(source_table)
+    )::regclass;
+
+    dest_oid := (
+        quote_ident(dest_schema) || '.' || quote_ident(dest_table)
+    )::regclass;
+
+    PERFORM _merge_checks(source_oid, dest_oid, dest_key);
+    EXECUTE _build_delete(source_oid, dest_oid, dest_key);
 END;
 $$;
 
@@ -501,7 +485,7 @@ AS $$
     SELECT auto_delete(source_schema, source_table, dest_schema, dest_table, (
             SELECT conname
             FROM pg_catalog.pg_constraint
-            WHERE conrelid = table_oid(dest_schema, dest_table)
+            WHERE conrelid = (quote_ident(dest_schema) || '.' || quote_ident(dest_table))::regclass
             AND contype = 'p'
         ));
 $$;
@@ -528,20 +512,6 @@ CREATE FUNCTION auto_delete(
 AS $$
     SELECT auto_delete(current_schema, source_table, current_schema, dest_table);
 $$;
-
-GRANT EXECUTE ON FUNCTION
-    auto_delete(name, name, name, name, name),
-    auto_delete(name, name, name, name),
-    auto_delete(name, name, name),
-    auto_delete(name, name)
-    TO utils_merge_user;
-
-GRANT EXECUTE ON FUNCTION
-    auto_delete(name, name, name, name, name),
-    auto_delete(name, name, name, name),
-    auto_delete(name, name, name),
-    auto_delete(name, name)
-    TO utils_merge_admin WITH GRANT OPTION;
 
 COMMENT ON FUNCTION auto_delete(name, name, name, name, name)
     IS 'Automatically removes data from dest_table that doesn''t exist in source_table, based on dest_key';

@@ -1,0 +1,4 @@
+# bulk transfer utilities
+comment = 'routines for bulk transfer between tables'
+default_version = '0.1'
+relocatable = true
