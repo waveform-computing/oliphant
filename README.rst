@@ -4,8 +4,8 @@
 oliphant
 ========
 
-This (extremely unimaginatively named) package provides a set of extensions
-for PostgreSQL 9.x (or above). The following extensions are currently included:
+This package provides a set of extensions for PostgreSQL 9.x (or above). The
+following extensions are currently included:
 
 * *assert* - A set of routines for asserting the truth of various things
   (equality or inequality of values, existence of tables and columns, etc.);
