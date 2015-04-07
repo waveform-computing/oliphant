@@ -1,8 +1,8 @@
 .. -*- rst -*-
 
-=======
-pgutils
-=======
+========
+oliphant
+========
 
 This (extremely unimaginatively named) package provides a set of extensions
 for PostgreSQL 9.x (or above). The following extensions are currently included:
@@ -32,7 +32,7 @@ Links
   be read on ReadTheDocs
 
 .. _MIT license: http://opensource.org/licenses/MIT
-.. _source code: https://github.com/waveform80/pgutils
-.. _bug tracker: https://github.com/waveform80/pgutils/issues
-.. _documentation: http://pgutils.readthedocs.org/
+.. _source code: https://github.com/waveform80/oliphant
+.. _bug tracker: https://github.com/waveform80/oliphant/issues
+.. _documentation: http://oliphant.readthedocs.org/
 
