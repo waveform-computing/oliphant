@@ -3,7 +3,7 @@
 CREATE ROLE foo_role;
 CREATE ROLE bar_role;
 
--- Check that auths_held and auth_diff work for a simple SELECT authority on
+-- Check that role_auths and auth_diff work for a simple SELECT authority on
 -- a table
 
 CREATE TABLE foo (i integer NOT NULL);
@@ -11,12 +11,12 @@ GRANT SELECT ON TABLE foo TO foo_role;
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('foo_role') AS t
+    FROM role_auths('foo_role') AS t
     WHERE object_id = 'foo'::regclass), 1::bigint));
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('bar_role') AS t
+    FROM role_auths('bar_role') AS t
     WHERE object_id = 'foo'::regclass), 0::bigint));
 
 VALUES (assert_equals((
@@ -24,13 +24,13 @@ VALUES (assert_equals((
     FROM auth_diff('foo_role', 'bar_role') AS t
     WHERE object_id = 'foo'::regclass), 1::bigint));
 
--- Check that copy_auth transfers the SELECT authority and nothing else
+-- Check that copy_role_auths transfers the SELECT authority and nothing else
 
-SELECT copy_auth('foo_role', 'bar_role');
+SELECT copy_role_auths('foo_role', 'bar_role');
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('bar_role') AS t
+    FROM role_auths('bar_role') AS t
     WHERE object_id = 'foo'::regclass), 1::bigint));
 
 VALUES (assert_equals((
@@ -38,13 +38,13 @@ VALUES (assert_equals((
     FROM auth_diff('foo_role', 'bar_role') AS t
     WHERE object_id = 'foo'::regclass), 0::bigint));
 
--- Check that remove_auth removes the SELECT authority
+-- Check that remove_role_auths removes the SELECT authority
 
-SELECT remove_auth('foo_role');
+SELECT remove_role_auths('foo_role');
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('foo_role') AS t
+    FROM role_auths('foo_role') AS t
     WHERE object_id = 'foo'::regclass), 0::bigint));
 
 -- Check that the same SELECT authority WITH GRANT OPTION counts as a
@@ -54,7 +54,7 @@ GRANT SELECT ON TABLE foo TO foo_role WITH GRANT OPTION;
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('foo_role') AS t
+    FROM role_auths('foo_role') AS t
     WHERE object_id = 'foo'::regclass), 1::bigint));
 
 VALUES (assert_equals((
@@ -62,13 +62,13 @@ VALUES (assert_equals((
     FROM auth_diff('foo_role', 'bar_role') AS t
     WHERE object_id = 'foo'::regclass), 1::bigint));
 
--- Check that copy_auth upgrades bar_role's SELECT authority
+-- Check that copy_role_auths upgrades bar_role's SELECT authority
 
-SELECT copy_auth('foo_role', 'bar_role');
+SELECT copy_role_auths('foo_role', 'bar_role');
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('bar_role') AS t
+    FROM role_auths('bar_role') AS t
     WHERE object_id = 'foo'::regclass
     AND suffix = 'WITH GRANT OPTION'), 1::bigint));
 
@@ -77,21 +77,21 @@ VALUES (assert_equals((
     FROM auth_diff('foo_role', 'bar_role') AS t
     WHERE object_id = 'foo'::regclass), 0::bigint));
 
--- Check that move_auth does the same as copy_auth followed by remove_auth
+-- Check that move_role_auths does the same as copy_role_auths followed by remove_role_auths
 
-SELECT remove_auth('foo_role');
-SELECT remove_auth('bar_role');
+SELECT remove_role_auths('foo_role');
+SELECT remove_role_auths('bar_role');
 GRANT SELECT ON TABLE foo TO foo_role;
-SELECT move_auth('foo_role', 'bar_role');
+SELECT move_role_auths('foo_role', 'bar_role');
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('foo_role') AS t
+    FROM role_auths('foo_role') AS t
     WHERE object_id = 'foo'::regclass), 0::bigint));
 
 VALUES (assert_equals((
     SELECT count(*)
-    FROM auths_held('bar_role') AS t
+    FROM role_auths('bar_role') AS t
     WHERE object_id = 'foo'::regclass
     AND suffix = ''), 1::bigint));
 

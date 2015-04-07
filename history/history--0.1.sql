@@ -919,16 +919,16 @@ BEGIN
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
-    PERFORM save_auth(source_schema, source_table);
-    UPDATE saved_auths SET
+    PERFORM store_table_auths(source_schema, source_table);
+    UPDATE stored_table_auths SET
         table_schema = dest_schema,
         table_name = dest_table
     WHERE
         table_schema = source_schema
         AND table_name = source_table;
-    DELETE FROM saved_auths WHERE
+    DELETE FROM stored_table_auths WHERE
         privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE');
-    PERFORM restore_auth(dest_schema, dest_table);
+    PERFORM restore_table_auths(dest_schema, dest_table);
 
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
@@ -1112,16 +1112,16 @@ BEGIN
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
-    PERFORM save_auth(source_schema, source_table);
-    UPDATE saved_auths SET
+    PERFORM store_table_auths(source_schema, source_table);
+    UPDATE stored_table_auths SET
         table_schema = dest_schema,
         table_name = dest_view
     WHERE
         table_schema = source_schema
         AND table_name = source_table;
-    DELETE FROM saved_auths WHERE
+    DELETE FROM stored_table_auths WHERE
         privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
-    PERFORM restore_auth(dest_schema, dest_view);
+    PERFORM restore_table_auths(dest_schema, dest_view);
 
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table
@@ -1278,16 +1278,16 @@ BEGIN
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
-    PERFORM save_auth(source_schema, source_table);
-    UPDATE saved_auths SET
+    PERFORM store_table_auths(source_schema, source_table);
+    UPDATE stored_table_auths SET
         table_schema = dest_schema,
         table_name = dest_view
     WHERE
         table_schema = source_schema
         AND table_name = source_table;
-    DELETE FROM saved_auths WHERE
+    DELETE FROM stored_table_auths WHERE
         privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES');
-    PERFORM restore_auth(dest_schema, dest_view);
+    PERFORM restore_table_auths(dest_schema, dest_view);
 
     -- Set up comments for the effective and expiry fields then copy the
     -- comments for all fields from the source table

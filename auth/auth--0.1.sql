@@ -29,9 +29,9 @@
 -- Complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION auth" to load this file. \quit
 
--- auths_held(auth_name)
+-- role_auths(auth_name)
 -------------------------------------------------------------------------------
--- This is a utility function used by the copy_auth procedure, and other
+-- This is a utility function used by the copy_role_auths procedure, and other
 -- associated procedures, below. Given an authorization name, and a flag, this
 -- table function returns the details of all the authorizations held by that
 -- name (excluding column authorizations). The information returned is
@@ -39,7 +39,7 @@
 -- statements.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION auths_held(
+CREATE FUNCTION role_auths(
     auth_name name
 )
     RETURNS TABLE (
@@ -99,7 +99,7 @@ AS $$
     SELECT * FROM table_auths;
 $$;
 
-COMMENT ON FUNCTION auths_held(name)
+COMMENT ON FUNCTION role_auths(name)
     IS 'Utility table function which returns all the authorizations held by a specific name';
 
 -- auth_diff(source, dest)
@@ -125,10 +125,10 @@ CREATE FUNCTION auth_diff(
     STABLE
 AS $$
     WITH source_auths AS (
-        SELECT * FROM auths_held(source)
+        SELECT * FROM role_auths(source)
     ),
     dest_auths AS (
-        SELECT * FROM auths_held(dest)
+        SELECT * FROM role_auths(dest)
     ),
     missing_auths AS (
         SELECT object_type, object_id, auth FROM source_auths EXCEPT
@@ -168,10 +168,10 @@ $$;
 COMMENT ON FUNCTION auth_diff(name, name)
     IS 'Utility table function which returns the difference between the authorities held by two names';
 
--- copy_auth(source, dest)
+-- copy_role_auths(source, dest)
 -------------------------------------------------------------------------------
--- copy_auth is a procedure which copies all authorizations from the source
--- grantee (source) to the destination grantee (dest). Note that the
+-- copy_role_auths is a procedure which copies all authorizations from the
+-- source grantee (source) to the destination grantee (dest). Note that the
 -- implementation does not preserve the grantor, although technically this
 -- would be possible by utilizing the SET SESSION AUTHORIZATION facility, nor
 -- does it remove extra permissions that the destination grantee already
@@ -211,7 +211,7 @@ AS $$
         auth_diff(source, dest);
 $$;
 
-CREATE FUNCTION copy_auth(
+CREATE FUNCTION copy_role_auths(
     source name,
     dest name
 )
@@ -231,13 +231,13 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION copy_auth(name, name)
+COMMENT ON FUNCTION copy_role_auths(name, name)
     IS 'Grants all authorities held by the source to the target, provided they are not already held (i.e. does not "re-grant" authorities already held)';
 
--- remove_auth(auth_name)
+-- remove_role_auths(auth_name)
 -------------------------------------------------------------------------------
--- remove_auth is a procedure which removes all authorizations from the entity
--- specified by auth_name.
+-- remove_role_auths is a procedure which removes all authorizations from the
+-- role specified by auth_name.
 --
 -- Note: this routine will not handle revoking column level authorizations.
 -- Any such authorziations must be handled manually.
@@ -273,12 +273,12 @@ AS $$
             auth_name
         ) AS ddl
     FROM
-        auths_held(auth_name)
+        role_auths(auth_name)
     WHERE
         NOT (object_type = '' AND auth = auth_name);
 $$;
 
-CREATE FUNCTION remove_auth(
+CREATE FUNCTION remove_role_auths(
     auth_name name
 )
     RETURNS void
@@ -297,22 +297,22 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION remove_auth(name)
+COMMENT ON FUNCTION remove_role_auths(name)
     IS 'Removes all authorities held by the specified name';
 
--- move_auth(source, dest)
+-- move_role_auths(source, dest)
 -------------------------------------------------------------------------------
--- move_auth is a procedure which moves all authorizations from the source
--- grantee (source) to the destination grantee (dest). Like copy_auth, this
--- procedure does not preserve the grantor.  Essentially this procedure
--- combines copy_auth and remove_auth to copy authorizations from source to
--- dest and then remove them from source.
+-- move_role_auths is a procedure which moves all authorizations from the
+-- source grantee (source) to the destination grantee (dest). Like
+-- copy_role_auths, this procedure does not preserve the grantor.  Essentially
+-- this procedure combines copy_role_auths and remove_role_auths to copy
+-- authorizations from source to dest and then remove them from source.
 --
 -- Note that column authorizations will not be copied, and cannot be removed by
--- remove_auth. These should be handled separately.
+-- remove_role_auths. These should be handled separately.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION move_auth(
+CREATE FUNCTION move_role_auths(
     source name,
     dest name
 )
@@ -320,49 +320,49 @@ CREATE FUNCTION move_auth(
     LANGUAGE SQL
     VOLATILE
 AS $$
-    SELECT copy_auth(source, dest);
-    SELECT remove_auth(source);
+    SELECT copy_role_auths(source, dest);
+    SELECT remove_role_auths(source);
 $$;
 
-COMMENT ON FUNCTION move_auth(name, name)
+COMMENT ON FUNCTION move_role_auths(name, name)
     IS 'Moves all authorities held by the source to the target, provided they are not already held';
 
 -- saved_auth
 -------------------------------------------------------------------------------
--- A simple table which replicates the structure of the auths_held return table
--- for use by the save_auth and restore_auth procedures below.
+-- A simple table which replicates the structure of the role_auths return table
+-- for use by the store_table_auths and restore_table_auths procedures below.
 -------------------------------------------------------------------------------
 
-CREATE TABLE saved_auths AS (
+CREATE TABLE stored_table_auths AS (
     SELECT table_schema, table_name, grantee, privilege_type, is_grantable::boolean
     FROM information_schema.table_privileges
 ) WITH NO DATA;
 
 CREATE UNIQUE INDEX saved_auths_pk
-    ON saved_auths (table_schema, table_name, grantee, privilege_type);
+    ON stored_table_auths (table_schema, table_name, grantee, privilege_type);
 
-ALTER TABLE saved_auths
+ALTER TABLE stored_table_auths
     ADD PRIMARY KEY USING INDEX saved_auths_pk,
     ALTER COLUMN is_grantable SET NOT NULL;
 
-COMMENT ON TABLE saved_auths
-    IS 'Utility table used for temporary storage of authorizations by save_auth, save_auths, restore_auth and restore_auths';
+COMMENT ON TABLE stored_table_auths
+    IS 'Utility table used for temporary storage of authorizations by store_table_auths, save_auths, restore_table_auths and restore_auths';
 
-SELECT pg_catalog.pg_extension_config_dump('saved_auths', '');
+SELECT pg_catalog.pg_extension_config_dump('stored_table_auths', '');
 
--- save_auth(aschema, atable)
--- save_auth(atable)
+-- store_table_auths(aschema, atable)
+-- store_table_auths(atable)
 -------------------------------------------------------------------------------
--- save_auth is a utility procedure which copies the authorization settings for
--- the specified table or view to the saved_auth table above. These saved
--- settings can then be restored with the restore_auth procedure declared
--- below.
+-- store_table_auths is a utility procedure which copies the authorization
+-- settings for the specified table or view to the saved_auth table above.
+-- These saved settings can then be restored with the restore_table_auths
+-- procedure declared below.
 --
 -- NOTE: Column specific authorizations are NOT saved and restored by these
 -- procedures.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION save_auth(aschema name, atable name)
+CREATE FUNCTION store_table_auths(aschema name, atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
@@ -383,7 +383,7 @@ AS $$
             privilege_type
     ),
     upsert AS (
-        UPDATE saved_auths AS dest SET
+        UPDATE stored_table_auths AS dest SET
             is_grantable = src.is_grantable
         FROM
             data AS src
@@ -395,7 +395,7 @@ AS $$
         RETURNING
             src.grantee, src.privilege_type
     )
-    INSERT INTO saved_auths (
+    INSERT INTO stored_table_auths (
         table_schema,
         table_name,
         grantee,
@@ -416,25 +416,25 @@ AS $$
         );
 $$;
 
-CREATE FUNCTION save_auth(atable name)
+CREATE FUNCTION store_table_auths(atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
-    VALUES (save_auth(current_schema, atable));
+    VALUES (store_table_auths(current_schema, atable));
 $$;
 
-COMMENT ON FUNCTION save_auth(name, name)
+COMMENT ON FUNCTION store_table_auths(name, name)
     IS 'Saves the authorizations of the specified relation for later restoration with the RESTORE_AUTH procedure';
-COMMENT ON FUNCTION save_auth(name)
+COMMENT ON FUNCTION store_table_auths(name)
     IS 'Saves the authorizations of the specified relation for later restoration with the RESTORE_AUTH procedure';
 
--- restore_auth(aschema, atable)
--- restore_auth(atable)
+-- restore_table_auths(aschema, atable)
+-- restore_table_auths(atable)
 -------------------------------------------------------------------------------
--- restore_auth is a utility procedure which restores the authorization
--- privileges for a table or view, previously saved by the save_auth procedure
--- defined above.
+-- restore_table_auths is a utility procedure which restores the authorization
+-- privileges for a table or view, previously saved by the store_table_auths
+-- procedure defined above.
 --
 -- NOTE: Privileges may not be precisely restored. Specifically, the grantor in
 -- the restored privileges may be different to the original grantor if you are
@@ -443,7 +443,7 @@ COMMENT ON FUNCTION save_auth(name)
 -- authorizations are NOT saved and restored by these procedures.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION restore_auth(aschema name, atable name)
+CREATE FUNCTION restore_table_auths(aschema name, atable name)
     RETURNS void
     LANGUAGE plpgsql
     VOLATILE
@@ -453,7 +453,7 @@ DECLARE
 BEGIN
     FOR r IN
         WITH data AS (
-            DELETE FROM saved_auths
+            DELETE FROM stored_table_auths
             WHERE
                 table_schema = aschema
                 AND table_name = atable
@@ -473,17 +473,17 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION restore_auth(atable name)
+CREATE FUNCTION restore_table_auths(atable name)
     RETURNS void
     LANGUAGE SQL
     VOLATILE
 AS $$
-    VALUES (restore_auth(current_schema, atable));
+    VALUES (restore_table_auths(current_schema, atable));
 $$;
 
-COMMENT ON FUNCTION restore_auth(name, name)
+COMMENT ON FUNCTION restore_table_auths(name, name)
     IS 'Restores authorizations previously saved by SAVE_AUTH for the specified table';
-COMMENT ON FUNCTION restore_auth(name)
+COMMENT ON FUNCTION restore_table_auths(name)
     IS 'Restores authorizations previously saved by SAVE_AUTH for the specified table';
 
 -- vim: set et sw=4 sts=4:
