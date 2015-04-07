@@ -1,28 +1,35 @@
-DBNAME:=$(USER)
+DBNAME = $(USER)
+PG_CONFIG = pg_config
+MODULES = assert auth history merge
+
+EXTENSION_DIR := $(shell $(PG_CONFIG) --sharedir)/extension
 
 install:
-	$(MAKE) -C assert install
-	$(MAKE) -C auth install
-	$(MAKE) -C history install
-	$(MAKE) -C merge install
-
-installdb:
-	psql -d $(DBNAME) -c "CREATE EXTENSION assert"
-	psql -d $(DBNAME) -c "CREATE EXTENSION auth"
-	psql -d $(DBNAME) -c "CREATE EXTENSION history"
-	psql -d $(DBNAME) -c "CREATE EXTENSION merge"
-
-uninstalldb:
-	psql -d $(DBNAME) -c "DROP EXTENSION merge"
-	psql -d $(DBNAME) -c "DROP EXTENSION history"
-	psql -d $(DBNAME) -c "DROP EXTENSION auth"
-	psql -d $(DBNAME) -c "DROP EXTENSION assert"
+	for m in $(MODULES); do \
+		$(MAKE) -C $$m install; \
+	done
 
 uninstall:
-	$(MAKE) -C assert uninstall
-	$(MAKE) -C auth uninstall
-	$(MAKE) -C history uninstall
-	$(MAKE) -C merge uninstall
+	for m in $(MODULES); do \
+		$(MAKE) -C $$m uninstall; \
+	done
+
+develop:
+	for m in $(MODULES); do \
+		for f in $$(find $$m -name "*.control") $$(find $$m -name "*.sql"); do \
+			ln -s $$(readlink -e $$f) $(EXTENSION_DIR)/$$(basename $$f); \
+		done; \
+	done
+
+installdb:
+	for m in $(MODULES); do \
+		psql -d $(DBNAME) -c "CREATE EXTENSION $$m"; \
+	done
+
+uninstalldb:
+	for m in $(MODULES); do \
+		psql -d $(DBNAME) -c "DROP EXTENSION $$m"; \
+	done
 
 doc:
 	$(MAKE) -C docs html
