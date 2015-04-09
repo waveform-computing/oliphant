@@ -55,6 +55,7 @@ to hack on the code. The following assumes Ubuntu::
     $ cd oliphant
     $ sudo make develop
 
+
 .. _database_install:
 
 =====================
@@ -85,3 +86,16 @@ to change this::
     CREATE EXTENSION
 
 .. _CREATE EXTENSION: http://www.postgresql.org/docs/9.1/static/sql-createextension.html
+
+
+.. _test_suite:
+
+====================
+Test suite execution
+====================
+
+With the extensions installed in a database (see :ref:`database_install`
+above), simply make the ``test`` target. All tests are echoed to stdout and any
+test that fails causes the script to immediately stop allowing the developer to
+diagnose the failure.
+

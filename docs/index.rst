@@ -12,7 +12,10 @@ Table of Contents
 
     install
     quickstart
-    usage
+    assert
+    auth
+    merge
+    history
     faq
     api
     changelog
