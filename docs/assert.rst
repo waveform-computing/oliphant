@@ -110,7 +110,6 @@ extensively within the test suite for the :mod:`assert` extension!)::
     dave=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 1)');
     ERROR:  SELECT assert_equals(1, 1) did not signal SQLSTATE UTA08
 
-
 API
 ===
 
