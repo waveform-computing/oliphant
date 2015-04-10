@@ -96,6 +96,20 @@ test a whole table structure using :func:`assert_equals`. For example::
 Naturally, one could extend this technique to include tests for the column
 types, nullability, etc.
 
+Finally, the :func:`assert_raises` function can be used to test whether
+arbitrary SQL raises an expected SQLSTATE. This is especially useful when
+building test suites for extensions (naturally, this function is used
+extensively within the test suite for the :mod:`assert` extension!)::
+
+    dave=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 2)');
+     assert_raises
+    ---------------
+
+    (1 row)
+
+    dave=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 1)');
+    ERROR:  SELECT assert_equals(1, 1) did not signal SQLSTATE UTA08
+
 
 API
 ===
