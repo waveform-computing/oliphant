@@ -44,6 +44,7 @@ VALUES (assert_equals(current_date, current_date));
 VALUES (assert_equals(current_timestamp, current_timestamp));
 VALUES (assert_equals(current_time, current_time));
 VALUES (assert_equals('foo', 'foo'));
+VALUES (assert_equals(1, NULL));
 
 VALUES (assert_raises('UTA08', $$ VALUES (assert_equals(0, 1)) $$));
 VALUES (assert_raises('UTA08', $$ VALUES (assert_equals(0.0, 1.0)) $$));
@@ -58,6 +59,7 @@ VALUES (assert_not_equals(current_date, (current_date - interval '1 day')::date)
 VALUES (assert_not_equals(current_timestamp, current_timestamp + interval '1 microsecond'));
 VALUES (assert_not_equals(current_time, current_time - interval '1 hour'));
 VALUES (assert_not_equals('foo', 'bar'));
+VALUES (assert_not_equals(1, NULL));
 
 VALUES (assert_raises('UTA09', $$ VALUES (assert_not_equals(0, 0)) $$));
 VALUES (assert_raises('UTA09', $$ VALUES (assert_not_equals(0.0, 0.0)) $$));

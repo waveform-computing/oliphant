@@ -17,44 +17,31 @@ functions of an individual extension.
 The functions of the :mod:`assert` extension are primarily intended for the
 construction of test suites. Each performs a relatively simple, obvious
 function, raising an error in the case of failure. For example, to ensure that
-a particular table exists, use :func:`assert_table_exists`::
+a particular table exists, use :func:`~assert.assert_table_exists`::
 
     CREATE TABLE foo (i integer NOT NULL, PRIMARY KEY);
 
     SELECT assert_table_exists('foo');
 
-Or to ensure that some value equals another value, use :func:`assert_equals`
-(this has overridden variants for all common types)::
+Or to ensure that some value equals another value, use
+:func:`~assert.assert_equals` (this has overridden variants for all common
+types)::
 
     INSERT INTO foo VALUES (1), (2), (3), (4);
 
     SELECT assert_equals(10, (SELECT SUM(i) FROM foo));
 
-Combined with some cunning catalog queries this can be used for some useful
-tests, such as ensuring that the structure of a table is as anticipated::
+Likewise, various similar functions are provided:
 
-    CREATE TABLE bar (
-        i integer NOT NULL PRIMARY KEY,
-        j integer NOT NULL
-    );
+* :func:`~assert.assert_not_equals`
+* :func:`~assert.assert_is_null`
+* :func:`~assert.assert_is_not_null`
+* :func:`~assert.assert_column_exists`
+* :func:`~assert.assert_function_exists`
+* :func:`~assert.assert_trigger_exists`
 
-    SELECT assert_equals(4::bigint, (
-        SELECT count(*)
-        FROM (
-            SELECT attnum, attname
-            FROM pg_catalog.pg_attribute
-            WHERE attrelid = 'bar'::regclass
-            AND attnum > 0
-
-            INTERSECT
-
-            VALUES
-                (1, 'i'),
-                (2, 'j'),
-        ) AS t));
-
-One of the more interesting functions is :func:`assert_raises` which can be
-used to check that something produces a specific SQLSTATE::
+One of the more interesting functions is :func:`~assert.assert_raises` which
+can be used to check that something produces a specific SQLSTATE::
 
     SELECT assert_raises('23505', 'INSERT INTO foo VALUES (1)');
 
@@ -64,9 +51,9 @@ used to check that something produces a specific SQLSTATE::
 ``auth`` extension
 ==================
 
-The functions of the ``auth`` module are intended for bulk manipulation of role
-based authorizations. For example, use :func:`copy_role_auths` to copy all roles
-from user1 to user2::
+The functions of the :mod:`auth` extension are intended for bulk manipulation
+of role based authorizations. For example, use :func:`~auth.copy_role_auths` to
+copy all roles from user1 to user2::
 
     SELECT copy_role_auths('user1', 'user2');
 
@@ -127,15 +114,15 @@ not supported by :ref:`ALTER TABLE`)::
 
 .. warning::
 
-    This extension does not, and is not intended to, solve the `UPSERT`_
+    This extension does not, and is not intended to, solve the UPSERT_
     problem. It is intended solely for bulk transfers between similarly
     structured relations.
 
-.. _atomic upsert: https://wiki.postgresql.org/wiki/UPSERT
+.. _UPSERT: https://wiki.postgresql.org/wiki/UPSERT
 
-The :func:`auto_insert` function constructs an :ref:`INSERT..SELECT <INSERT>`
-statement for every column with the same name in both table1 and table2.
-Consider the following example definitions::
+The :func:`~merge.auto_insert` function constructs an :ref:`INSERT..SELECT
+<INSERT>` statement for every column with the same name in both table1 and
+table2.  Consider the following example definitions::
 
     CREATE TABLE table1 (
         i integer NOT NULL PRIMARY KEY,
@@ -156,8 +143,8 @@ With these definitions, the following statements are equivalent::
 
     INSERT INTO table2 (i, j, k) SELECT i, j, k FROM table1;
 
-The :func:`auto_merge` function constructs the PostgreSQL equivalent of an
-UPSERT or MERGE statement using writeable CTEs. Given the table definitions
+The :func:`~merge.auto_merge` function constructs the PostgreSQL equivalent of
+an UPSERT or MERGE statement using writeable CTEs. Given the table definitions
 above, the following statements are equivalent::
 
     SELECT auto_merge('table1', 'table2');
@@ -178,7 +165,7 @@ above, the following statements are equivalent::
         FROM upsert
     );
 
-Finally, the :func:`auto_delete` function is used to remove
+Finally, the :func:`~merge.auto_delete` function is used to remove
 all rows from table2 that do not exist in table1. Again, with the table
 definitions used above, the following statements are equivalent::
 
@@ -249,7 +236,7 @@ The resulting view will be called "employees_changes" by default. It will have
 a "changed" column (the date or timestamp) on which the change took place, a
 "change" column (containing the string "INSERT", "UPDATE", or "DELETE"
 depending on what operation took place), and two columns for each column in the
-base table, prefixed with "old_" and "new_" giving the "before" and "after"
+base table, prefixed with "old\_" and "new\_" giving the "before" and "after"
 values for each column.
 
 For example, to find all rows where an employee received a salary increase::

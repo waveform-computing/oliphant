@@ -192,8 +192,8 @@ COMMENT ON FUNCTION assert_trigger_exists(name, name, name)
 COMMENT ON FUNCTION assert_trigger_exists(name, name)
     IS 'Raises an exception if the specified trigger does not exist';
 
--- assert_function_exists(aschema, afunction, args)
--- assert_function_exists(afunction, args)
+-- assert_function_exists(aschema, afunction, argtypes)
+-- assert_function_exists(afunction, argtypes)
 -------------------------------------------------------------------------------
 -- Raises an exception if afunction does not exist with the specified argument
 -- types. If not specified, aschema defaults to the value of the
