@@ -327,7 +327,7 @@ $$;
 COMMENT ON FUNCTION move_role_auths(name, name)
     IS 'Moves all authorities held by the source to the target, provided they are not already held';
 
--- saved_auth
+-- stored_table_auths
 -------------------------------------------------------------------------------
 -- A simple table which replicates the structure of the role_auths return table
 -- for use by the store_table_auths and restore_table_auths procedures below.
