@@ -6,7 +6,9 @@ The ``history`` Extension
 
 The history extension was created to ease the construction and maintenance
 of temporal tables; that is tables which track the state of another table over
-time. It can be installed and removed in the standard manner::
+time. It can be installed and removed in the standard manner:
+
+.. code-block:: sql
 
     CREATE EXTENSION history;
     DROP EXTENSION history;
@@ -18,7 +20,9 @@ Usage
 =====
 
 To create a history table corresponding to an existing table, use the
-:func:`create_history_table` procedure like so::
+:func:`create_history_table` procedure like so:
+
+.. code-block:: sql
 
     CREATE TABLE employees (
         emp_id          integer NOT NULL PRIMARY KEY,
@@ -34,7 +38,9 @@ To create a history table corresponding to an existing table, use the
 Firstly the procedure will create a new table called ``employees_history``
 (you can specify a different name with one of the overloaded variants of
 the procedure). The new table will have a structure equivalent to executing
-the following statement::
+the following statement:
+
+.. code-block:: sql
 
     CREATE TABLE employees_history (
         effective       date NOT NULL DEFAULT current_date,
@@ -79,7 +85,9 @@ differences:
   *not* copied for reasons explained below.
 
 Finally, data is copied from the original table into the new history table
-as if the following statement had been executed::
+as if the following statement had been executed:
+
+.. code-block:: sql
 
     INSERT INTO employees_history
         (emp_id, name, dob, dept, is_manager, salary)
@@ -92,7 +100,9 @@ those fields appropriately during this operation.
 This is the first step in creating a functional history table. The next step
 is to create the triggers that link the base table to the history table. This
 is performed separately for reasons that will be explained below. The procedure
-to create these triggers is called as follows::
+to create these triggers is called as follows:
+
+.. code-block:: sql
 
     SELECT create_history_triggers('employees', 'day');
 
@@ -140,7 +150,9 @@ The structure of the history table can be understood as follows:
   table.
 
 Therefore, to query the state of the base table at date 2014-01-01 you can
-simply use the following query::
+simply use the following query:
+
+.. code-block:: sql
 
     SELECT emp_id, name, dob, dept, is_manager, salary
     FROM employees_history
@@ -150,7 +162,9 @@ If you have a join to the base table, you can join to the history table in the
 same way - just include the criteria above to select the state of the table at
 a particular time. For example, assume there exists a table which tracks any
 bonuses awarded to employees. We can calculate the amount that the company has
-spent on bonuses like so::
+spent on bonuses like so:
+
+.. code-block:: sql
 
     CREATE TABLE bonuses (
         emp_id          integer NOT NULL,
@@ -181,7 +195,9 @@ is harder to see how one could query changes within the history. For example,
 which employees have received a salary increase? Usually for this, it is
 necessary to self-join the history table so that one can see before and after
 states for changes. Creation of such views is automated with the
-:func:`create_history_changes` function. We can simply execute::
+:func:`create_history_changes` function. We can simply execute:
+
+.. code-block:: sql
 
     SELECT create_history_changes('employees_history');
 
@@ -196,7 +212,9 @@ attributes:
   table there will be two columns in the view, prefixed with "old\_" and
   "new\_"
 
-In our example above, the view would be defined with the following SQL::
+In our example above, the view would be defined with the following SQL:
+
+.. code-block:: sql
 
     CREATE VIEW employees_changes AS
     SELECT
@@ -231,14 +249,18 @@ In our example above, the view would be defined with the following SQL::
             AND old.emp_id = new.emp_id;
 
 With this view it is now a simple matter to determine which employees have
-received a salary increase::
+received a salary increase:
+
+.. code-block:: sql
 
     SELECT *
     FROM employees_changes
     WHERE change = 'UPDATE'
     AND new_salary > old_salary;
 
-Or we can find out who joined and who left during the last year::
+Or we can find out who joined and who left during the last year:
+
+.. code-block:: sql
 
     SELECT *
     FROM employees_changes
@@ -249,11 +271,15 @@ Another common use case of history tables is to see the changes in data over
 time via regular snapshots. This is also easily accomplished with the
 :func:`create_history_snapshots` function which takes the history table and
 a resolution (which must be greater than the history table's resolution).
-For example, to view the employees table as a series of monthly snapshots::
+For example, to view the employees table as a series of monthly snapshots:
+
+.. code-block:: sql
 
     SELECT create_history_snapshots('employees_history', 'month');
 
-This is equivalent to executing the following SQL::
+This is equivalent to executing the following SQL:
+
+.. code-block:: sql
 
     CREATE VIEW employees_by_month AS
     WITH RECURSIVE range(at) AS (
@@ -283,14 +309,18 @@ The resulting view has the same structure as the base table, but with one extra
 column at the start: ``snapshot`` which in the case above will contain a date
 running from the lowest date in the history to the current date in monthly
 increments. If we wished for an employee head-count by month we could simply
-use the following query::
+use the following query:
+
+.. code-block:: sql
 
     SELECT snapshot, count(*) AS head_count
     FROM employees_by_month
     GROUP BY snapshot;
 
 Or we could find out the employee headcount and salary costs broken down by
-month and managerial status::
+month and managerial status:
+
+.. code-block:: sql
 
     SELECT
         snapshot,
@@ -313,7 +343,9 @@ This section discusses the various ways in which one can represent temporal
 data and attempts to justify the design that this particular extension uses.
 The first naïve attempts to track the history of a table typically look like
 this (assuming the structure of the ``employees`` table from the usage
-section above)::
+section above):
+
+.. code-block:: sql
 
     CREATE TABLE employees (
         changed         date NOT NULL,
@@ -328,7 +360,9 @@ section above)::
     );
 
 Now let's place some sample data in here; the addition of three employees
-sometime in 2007::
+sometime in 2007:
+
+.. code-block:: sql
 
     INSERT INTO employees VALUES
         ('2007-07-06', 1, 'Tom',   '1976-01-01', 'D001', false, 40000),
@@ -336,7 +370,9 @@ sometime in 2007::
         ('2007-07-01', 3, 'Harry', '1977-12-25', 'D002', false, 35000);
 
 Now later in 2007, Harry gets a promotion to manager, and Dick changes his name
-to Richard::
+to Richard:
+
+.. code-block:: sql
 
     INSERT INTO employees VALUES
         ('2007-10-01', 3, 'Harry',   '1977-12-25', 'D002', true, 70000),
@@ -346,7 +382,8 @@ At this point we can see that the table is tracking the history of the
 employees, and we can write relatively simple queries to answer questions about
 the data.  For example, when did Harry get his promotion?
 
-::
+.. code-block:: sql
+
     SELECT min(changed)
     FROM employees
     WHERE emp_id = 3
@@ -355,7 +392,8 @@ the data.  For example, when did Harry get his promotion?
 However, other questions are more difficult to answer with this structure.
 What was Harry's salary immediately before his promotion?
 
-::
+.. code-block:: sql
+
     SELECT salary
     FROM employees e1
     WHERE emp_id = 3
@@ -380,7 +418,9 @@ wasteful of space, and thus very slow in practice.
 
 Another alternative, similar to the view produced by
 :func:`create_history_changes` is to add another field indicating the change
-that occurred, e.g.::
+that occurred, e.g.:
+
+.. code-block:: sql
 
     CREATE TABLE employees (
         changed         date NOT NULL,

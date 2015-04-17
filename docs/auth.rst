@@ -6,7 +6,9 @@ The ``auth`` Extension
 
 The auth extension was originally created to manage bulk authorization
 transfers in large scale data warehouses. It can be installed and removed in
-the standard manner::
+the standard manner:
+
+.. code-block:: sql
 
     CREATE EXTENSION auth;
     DROP EXTENSION auth;
@@ -42,14 +44,18 @@ currently does not.
     objects such as views), functions, and roles. Authorizations for other
     objects are *not* copied.
 
-For example::
+For example:
+
+.. code-block:: sql
 
     SELECT copy_role_auths('fred', 'barney');
 
 Another function, :func:`remove_role_auths` is provided to remove all
 authorities from a user, and this is also used in the implementation of
 :func:`move_role_auths` which simply performs a copy of authorities, then
-removes them from the source user::
+removes them from the source user:
+
+.. code-block:: sql
 
     SELECT move_role_auths('fred', 'barney');
     SELECT remove_role_auths('wilma');
@@ -70,7 +76,9 @@ then be used to restore the authorizations to the table (removing them from
 These routines can be used in a number of scenarios. The simplest is when a
 table needs to be reconstructed (to deal with some structural change that
 cannot be accomplished with :ref:`ALTER TABLE`) and you wish to maintain the
-authorizations for the table::
+authorizations for the table:
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     DROP TABLE foo;
@@ -80,7 +88,9 @@ authorizations for the table::
 
 However, given that the ``stored_table_auths`` table can itself be manipulated,
 it can also be used for other effects. For example, to copy the authorizations
-from one table to another::
+from one table to another:
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     CREATE TABLE bar (i integer NOT NULL);
@@ -89,7 +99,9 @@ from one table to another::
 
 Or, to ensure that anyone who can ``SELECT`` from table ``foo``, can also
 ``SELECT`` from the view ``bar`` (ignoring other privileges like ``INSERT``,
-``UPDATE``, and such like)::
+``UPDATE``, and such like):
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     CREATE VIEW bar AS SELECT * FROM foo;

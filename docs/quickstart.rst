@@ -19,6 +19,8 @@ construction of test suites. Each performs a relatively simple, obvious
 function, raising an error in the case of failure. For example, to ensure that
 a particular table exists, use :func:`~assert.assert_table_exists`::
 
+.. code-block:: sql
+
     CREATE TABLE foo (i integer NOT NULL, PRIMARY KEY);
 
     SELECT assert_table_exists('foo');
@@ -26,6 +28,8 @@ a particular table exists, use :func:`~assert.assert_table_exists`::
 Or to ensure that some value equals another value, use
 :func:`~assert.assert_equals` (this has overridden variants for all common
 types)::
+
+.. code-block:: sql
 
     INSERT INTO foo VALUES (1), (2), (3), (4);
 
@@ -43,6 +47,8 @@ Likewise, various similar functions are provided:
 One of the more interesting functions is :func:`~assert.assert_raises` which
 can be used to check that something produces a specific SQLSTATE::
 
+.. code-block:: sql
+
     SELECT assert_raises('23505', 'INSERT INTO foo VALUES (1)');
 
 
@@ -54,6 +60,8 @@ can be used to check that something produces a specific SQLSTATE::
 The functions of the :mod:`auth` extension are intended for bulk manipulation
 of role based authorizations. For example, use :func:`~auth.copy_role_auths` to
 copy all roles from user1 to user2::
+
+.. code-block:: sql
 
     SELECT copy_role_auths('user1', 'user2');
 
@@ -69,10 +77,14 @@ instead.
 If you wish to move all authorizations from one user to another this can be
 accomplished with the similar procedure::
 
+.. code-block:: sql
+
     SELECT move_role_auths('user1', 'user2');
 
 A couple of other procedures can be used to manipulate table authorizations.
 To store and restore the authorizations associated with a table::
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     SELECT restore_table_auths('foo');
@@ -82,12 +94,16 @@ authorizations are stored in the ``stored_table_auths`` table which allows you
 to manipulate them between storage and restoration. For example, to copy
 all authorizations from one table to another::
 
+.. code-block:: sql
+
     SELECT store_table_auths('foo');
     UPDATE stored_table_auths SET table_name = 'bar'
     WHERE table_name = 'foo';
     SELECT restore_table_auths('bar');
 
 Alternatively, to copy only the SELECT privileges::
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     DELETE FROM stored_table_auths
@@ -100,6 +116,8 @@ Alternatively, to copy only the SELECT privileges::
 Of course, even without manipulation it can be useful when one wishes to drop
 and recreate the table for any reason (e.g. to change the structure in a way
 not supported by :ref:`ALTER TABLE`)::
+
+.. code-block:: sql
 
     SELECT store_table_auths('foo');
     DROP TABLE foo;
@@ -122,7 +140,9 @@ not supported by :ref:`ALTER TABLE`)::
 
 The :func:`~merge.auto_insert` function constructs an :ref:`INSERT..SELECT
 <INSERT>` statement for every column with the same name in both table1 and
-table2.  Consider the following example definitions::
+table2.  Consider the following example definitions:
+
+.. code-block:: sql
 
     CREATE TABLE table1 (
         i integer NOT NULL PRIMARY KEY,
@@ -137,7 +157,9 @@ table2.  Consider the following example definitions::
         d timestamp DEFAULT current_timestamp NOT NULL
     );
 
-With these definitions, the following statements are equivalent::
+With these definitions, the following statements are equivalent:
+
+.. code-block:: sql
 
     SELECT auto_insert('table1', 'table2');
 
@@ -145,7 +167,9 @@ With these definitions, the following statements are equivalent::
 
 The :func:`~merge.auto_merge` function constructs the PostgreSQL equivalent of
 an UPSERT or MERGE statement using writeable CTEs. Given the table definitions
-above, the following statements are equivalent::
+above, the following statements are equivalent:
+
+.. code-block:: sql
 
     SELECT auto_merge('table1', 'table2');
 
@@ -167,7 +191,9 @@ above, the following statements are equivalent::
 
 Finally, the :func:`~merge.auto_delete` function is used to remove
 all rows from table2 that do not exist in table1. Again, with the table
-definitions used above, the following statements are equivalent::
+definitions used above, the following statements are equivalent:
+
+.. code-block:: sql
 
     SELECT auto_delete('table1', 'table2');
 
@@ -191,7 +217,9 @@ definitions used above, the following statements are equivalent::
     introduction and/or refresher and does not discuss the complexities of
     temporal data at all.
 
-In this section, the following example tables will be used::
+In this section, the following example tables will be used:
+
+.. code-block:: sql
 
     CREATE TABLE employees (
         user_id     integer NOT NULL PRIMARY KEY,
@@ -205,7 +233,9 @@ In this section, the following example tables will be used::
 In order to track the history of changes to a particular table, construct
 a history table and set of triggers to maintain the content of the history
 table. The second parameter in the calls below specifies the resolution of
-changes that will be kept (this can be any interval supported by PostgreSQL)::
+changes that will be kept (this can be any interval supported by PostgreSQL):
+
+.. code-block:: sql
 
     SELECT create_history_table('employees', 'day');
     SELECT create_history_triggers('employees', 'day');
@@ -222,13 +252,17 @@ table, with the effective date set to the current date, and expiry set to
 
 As changes are made to the base table, the history table will be automatically
 updated by triggers. To query the state of the base table at a particular
-point in time, X, simply use the following query::
+point in time, X, simply use the following query:
+
+.. code-block:: sql
 
     SELECT * FROM employees_history WHERE X BETWEEN effective AND expiry;
 
 To view the changes as a set of insertions, updates, and deletions, along with
 the ability to easily see "before" and "after" values for updates, construct a
-"changes" view with the following procedure::
+"changes" view with the following procedure:
+
+.. code-block:: sql
 
     SELECT create_history_changes('employees_history');
 
@@ -239,7 +273,9 @@ depending on what operation took place), and two columns for each column in the
 base table, prefixed with "old\_" and "new\_" giving the "before" and "after"
 values for each column.
 
-For example, to find all rows where an employee received a salary increase::
+For example, to find all rows where an employee received a salary increase:
+
+.. code-block:: sql
 
     SELECT * FROM employees_changes
     WHERE change = 'UPDATE'
@@ -247,7 +283,9 @@ For example, to find all rows where an employee received a salary increase::
 
 It is also possible to construct a view which provides snapshots of the base
 table over time. This is particularly useful for aggregation queries. For
-example::
+example:
+
+.. code-block:: sql
 
     SELECT create_history_snapshots('employees_history', 'month');
 

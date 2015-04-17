@@ -5,7 +5,9 @@ The ``assert`` Extension
 ========================
 
 The assert extension grew out of a desire to construct a test suite using SQL
-statements alone. It can be installed and removed in the standard manner::
+statements alone. It can be installed and removed in the standard manner:
+
+.. code-block:: sql
 
     CREATE EXTENSION assert;
     DROP EXTENSION assert;
@@ -71,7 +73,9 @@ individual columns within a relation), :func:`assert_function_exists`, and
     (1 row)
 
 Note that with a bit of querying knowledge, it is actually more efficient to
-test a whole table structure using :func:`assert_equals`. For example::
+test a whole table structure using :func:`assert_equals`. For example:
+
+.. code-block:: sql
 
     CREATE TABLE bar (
         i integer NOT NULL PRIMARY KEY,
