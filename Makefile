@@ -1,6 +1,6 @@
 DBNAME = $(USER)
 PG_CONFIG = pg_config
-MODULES = assert auth history merge
+MODULES = assert auth merge history
 
 EXTENSION_DIR := $(shell $(PG_CONFIG) --sharedir)/extension
 
