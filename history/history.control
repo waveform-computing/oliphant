@@ -2,4 +2,4 @@
 comment = 'temporal data extension'
 default_version = '0.1'
 relocatable = true
-requires = 'auth'
+requires = 'auth,merge'

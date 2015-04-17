@@ -5,6 +5,8 @@ CREATE TABLE foo (
     value integer NOT NULL
 );
 
+INSERT INTO foo (id, value) VALUES (1, 1);
+
 -- Create a history table from the base table and ensure it exists, and has
 -- the expected structure
 
@@ -65,8 +67,8 @@ VALUES (assert_equals(6::bigint, (
 -- running within an extended transaction and that therefore the values of
 -- current_date, current_timestamp, etc. will always be equal
 
-INSERT INTO foo (id, value) VALUES (1, 1);
-VALUES (assert_equals(1::bigint, (
+INSERT INTO foo VALUES (2, 2);
+VALUES (assert_equals(2::bigint, (
     SELECT count(*)
     FROM (
         SELECT * FROM foo_history
@@ -74,11 +76,12 @@ VALUES (assert_equals(1::bigint, (
         INTERSECT
 
         VALUES
-            (current_date, date '9999-12-31', 1, 1)
+            (current_date, date '9999-12-31', 1, 1),
+            (current_date, date '9999-12-31', 2, 2)
     ) AS t)));
 
 DELETE FROM foo WHERE id = 1;
-VALUES (assert_equals(0::bigint, (SELECT count(*) FROM foo_history)));
+VALUES (assert_equals(1::bigint, (SELECT count(*) FROM foo_history)));
 
 -- We cheat a bit here by manipulating the effective date in the history table
 -- but it's the easiest way to test the other half of the update & delete
@@ -87,7 +90,7 @@ VALUES (assert_equals(0::bigint, (SELECT count(*) FROM foo_history)));
 INSERT INTO foo (id,value) VALUES (1, 1);
 UPDATE foo_history SET effective = current_date - interval '1 day' WHERE id = 1;
 DELETE FROM foo WHERE id = 1;
-VALUES (assert_equals(1::bigint, (
+VALUES (assert_equals(2::bigint, (
     SELECT count(*)
     FROM (
         SELECT * FROM foo_history
@@ -95,10 +98,11 @@ VALUES (assert_equals(1::bigint, (
         INTERSECT
 
         VALUES
-            (current_date - interval '1 day', current_date - interval '1 day', 1, 1)
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date,                    date '9999-12-31',               2, 2)
     ) AS t)));
 
-INSERT INTO foo (id, value) VALUES (2, 1);
+UPDATE foo SET value = 1 WHERE id = 2;
 VALUES (assert_equals(2::bigint, (
     SELECT count(*)
     FROM (

@@ -916,6 +916,10 @@ BEGIN
         _history_expname(resolution), _history_expdefault(resolution)
     );
 
+    -- Copy the base table's data into the history table. The defaults of the
+    -- effective and expiry columns should ensure the right result
+    PERFORM auto_insert(source_schema, source_table, dest_schema, dest_table);
+
     -- Store the source table's authorizations, then redirect them to the
     -- destination table filtering out those authorizations which should be
     -- excluded
@@ -1451,6 +1455,8 @@ BEGIN
             RETURNS trigger
             LANGUAGE plpgsql
             IMMUTABLE
+            SECURITY DEFINER
+            SET search_path = %I, pg_temp
         AS $func$
         BEGIN
             RAISE EXCEPTION USING
@@ -1463,6 +1469,7 @@ BEGIN
         $sql$,
 
         source_schema, source_table || '_keychg',
+        dest_schema,
         'UTH01', format('Cannot update unique key of a row in %I.%I',
             source_schema, source_table), source_oid
     );
@@ -1490,6 +1497,8 @@ BEGIN
             RETURNS trigger
             LANGUAGE plpgsql
             VOLATILE
+            SECURITY DEFINER
+            SET search_path = %I, pg_temp
         AS $func$
         BEGIN
             %s;
@@ -1499,6 +1508,7 @@ BEGIN
         $sql$,
 
         source_schema, source_table || '_insert',
+        dest_schema,
         _history_insert(source_oid, dest_oid, resolution, shift)
     );
     EXECUTE format(
@@ -1522,6 +1532,8 @@ BEGIN
                 RETURNS trigger
                 LANGUAGE plpgsql
                 VOLATILE
+                SECURITY DEFINER
+                SET search_path = %I, pg_temp
             AS $func$
             DECLARE
                 chk_date timestamp;
@@ -1556,6 +1568,7 @@ BEGIN
             $sql$,
 
             source_schema, source_table || '_update',
+            dest_schema,
             _history_check(source_oid, dest_oid, resolution),
             _history_effnext(resolution, shift),
             _history_expire(source_oid, dest_oid, resolution, shift),
@@ -1589,6 +1602,8 @@ BEGIN
             RETURNS trigger
             LANGUAGE plpgsql
             VOLATILE
+            SECURITY DEFINER
+            SET search_path = %I, pg_temp
         AS $func$
         DECLARE
             chk_date timestamp;
@@ -1619,6 +1634,7 @@ BEGIN
         $sql$,
 
         source_schema, source_table || '_delete',
+        dest_schema,
         _history_check(source_oid, dest_oid, resolution),
         _history_effnext(resolution, shift),
         _history_expire(source_oid, dest_oid, resolution, shift),
