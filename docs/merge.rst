@@ -35,7 +35,7 @@ position). In the following examples we will assume these table definitions:
         title           varchar(20) NOT NULL,
         plan_cost       decimal(18, 2) NOT NULL,
         plan_revenue    decimal(18, 2) NOT NULL,
-        last_updated    timestamp NOT NULL
+        last_updated    timestamp NOT NULL,
         last_updated_by name NOT NULL
     );
 
@@ -82,6 +82,103 @@ ordered correctly in the generated statement. Furthermore, columns that are not
 present in both tables are excluded, so ``last_updated`` and
 ``last_updated_by`` from the source table are ignored while ``actual_cost`` and
 ``actual_revenue`` will use their default values in the target table.
+
+The similar function :func:`auto_merge` can be used to perform an "upsert" (a
+combination of INSERT or UPDATE as appropriate) between two tables. The
+function can be used with our example relations like so:
+
+.. code-block:: sql
+
+    SELECT auto_merge('contracts_source', 'contracts_target');
+
+This is equivalent to executing the following SQL:
+
+.. code-block:: sql
+
+    WITH upsert AS (
+        UPDATE contracts_target AS dest SET
+            plan_cost = src.plan_cost,
+            plan_revenue = src.plan_revenue,
+            title = src.title
+        FROM contracts_source AS src
+        WHERE
+            src.contract_id = dest.contract_id
+            AND src.customer_id = dest.customer_id
+        RETURNING
+            src.contract_id,
+            src.customer_id
+    )
+    INSERT INTO contracts_target (
+        contract_id,
+        customer_id,
+        plan_cost,
+        plan_revenue,
+        title
+    )
+    SELECT
+        contract_id,
+        customer_id,
+        plan_cost,
+        plan_revenue,
+        title
+    FROM contracts_source
+    WHERE ROW (contract_id, customer_id) NOT IN (
+        SELECT contract_id, customer_id
+        FROM upsert
+    );
+
+As you can discern from reading the above, this will attempt to execute updates
+with each row from source against the target table and, if it fails to find
+a matching row (according to the primary key of the target table, by default)
+it attempts insertion instead.
+
+Finally, the :func:`auto_delete` function can be used to automatically delete
+rows that exist in the target table, that do not exist in the source table:
+
+.. code-block:: sql
+
+    SELECT auto_delete('contracts_source', 'contracts_target');
+
+This is equivalent to executing the following statement:
+
+.. code-block:: sql
+
+    DELETE FROM contracts_target WHERE ROW (contract_id, customer_id) IN (
+        SELECT contract_id, customer_id FROM contracts_target
+        EXCEPT
+        SELECT contract_id, customer_id FROM contracts_source
+    )
+
+Use-cases
+=========
+
+These routines are designed for use in a data warehouse environment in which
+cleansing of incoming data is handled by views within the database.  The
+process is intended to work as follows:
+
+1. Data is copied into a set of tables which replicate the structures of their
+   source, without any constraints or restrictions. The lack of constraints
+   is important to ensure that the source table is replicated perfectly, but
+   (non-unique) indexes can be created on these tables to ensure performance
+   in the next stages.
+
+2. On top of the source tables, views are created to handle cleaning the data.
+   Bear in mind that any INSERT, UPDATE, or DELETE operations can be emulated
+   via queries. For example:
+
+    - If you need to INSERT records into the source material, simply UNION ALL
+      the source table with the new records (generated via a VALUES statement)
+
+    - If you need to DELETE records from the source material, simply filter
+      them out in the WHERE clause (or with a JOIN)
+
+    - If you need to UPDATE records in the source material, change the values
+      with transformations in the SELECT clause
+
+3. Finally, the reporting tables are created with the same structure as the
+   output of the cleaning views from the step above.
+
+To give a concrete example of this method, consider the examples from above.
 
 API
 ===
