@@ -272,12 +272,12 @@ referenced above:
     );
 
 In this case we have to ensure that new customers are inserted before contracts
-is updated (in case any contracts reference the new customers) but we must
-ensure that old customers are deleted *after* contracts is updated (in case any
-existing contracts reference the old customers). Assuming customers had a
-similar setup (a table to hold the raw source data, a view to clean the raw
-data, and a final table to contain the cleaned data), in this case our loading
-script might look something like this:
+is updated (in case any contracts reference the new customers) but we must also
+ensure that old customers are only deleted *after* contracts has been updated
+(in case any existing contracts reference the old customers). Assuming
+customers had a similar setup (a table to hold the raw source data, a view to
+clean the raw data, and a final table to contain the cleaned data), in this
+case our loading script might look something like this:
 
 .. code-block:: psql
 
@@ -288,6 +288,10 @@ script might look something like this:
     SELECT auto_merge('contracts_clean', 'contracts');
     SELECT auto_delete('contracts_clean', 'contracts');
     SELECT auto_delete('customers_clean', 'customers');
+
+As a general rule, given a hierarchy of tables with foreign keys between them,
+merge from the top of the hierarchy down to the bottom, then delete from the
+bottom of the hierarchy back up to the top.
 
 Why bother with a merge function at all? Why not truncate and re-write the
 target table each time? In the case of small to medium sized tables this may be
@@ -302,7 +306,7 @@ accurately telling the database engine what happened to each record: whether
 it was inserted, updated or deleted at the source. If we truncated and re-wrote
 the whole table such information would be lost. In turn this allows us to
 accurately use the :mod:`history` extension to keep a history of our customers
-and contracts tables. We could simply do:
+and contracts tables. We could simply execute the following statements:
 
 .. code-block:: sql
 
@@ -328,6 +332,16 @@ API
         to the current schema if omitted.
     :param dest_table: The destination table into which data will be inserted.
 
+    Inserts rows from the table named by *source_schema* and *source_table*
+    into the table named by *target_schema* and *target_table*. The schema
+    parameters can be omitted in which case they will default to the current
+    schema.
+
+    Columns of the two tables will be matched by name, *not* by position. Any
+    columns that do not occur in both tables will be omitted (if said columns
+    occur in the target table, the defaults of those columns will be used on
+    insertion). The source table may also be a view.
+
 .. function:: auto_merge(source_schema, source_table, dest_schema, dest_table, dest_key)
               auto_merge(source_schema, source_table, dest_schema, dest_table)
               auto_merge(source_table, dest_table, dest_key)
@@ -343,6 +357,28 @@ API
         will be used for matching existing records. Defaults to the primary
         key if omitted.
 
+    Merges rows from the table identified by *source_schema* and *source_table*
+    into the table identified by *target_schema* and *target_table*, based on
+    the primary or unique key of the target table named by *dest_key*. If the
+    schema parameters are omitted they default to the current schema. If the
+    *dest_key* parameter is omitted it defaults to the name of the primary key
+    of the target table.
+
+    Columns of the two tables will be matched by name, *not* by position. Any
+    columns that do not occur in both tables will be omitted from updates or
+    inserts. However, all columns specified in *dest_key* must also exist in
+    the source table.
+
+    If a row from the source table already exists in the target table, it will
+    be updated with the non-key attributes of that row in the source table.
+    Otherwise, it will be inserted into the target table.
+
+    .. warning::
+
+        This function is intended for bulk transfer between similarly
+        structured relations. It does not solve the concurrency issues required
+        by those looking for atomic upsert functionality.
+
 .. function:: auto_delete(source_schema, source_table, dest_schema, dest_table, dest_key)
               auto_delete(source_schema, source_table, dest_schema, dest_table)
               auto_delete(source_table, dest_table, dest_key)
@@ -357,4 +393,14 @@ API
     :param dest_key: The primary or unique key on the destination table which
         will be used for matching existing records. Defaults to the primary
         key if omitted.
+
+    Removes rows from the table identified by *target_schema* and
+    *target_table* if those rows do not also exist in the table identified by
+    *source_schema* and *source_table*, based on the primary or unique key of
+    the target table named by *dest_key*. If the schema parameters are omitted
+    they default to the current schema. If the *dest_key* parameter is omitted
+    it defaults to the primary key of the target table.
+
+    Columns of the two tables will be matched by name, *not* by position.  All
+    columns specified in *dest_key* must exist in the source table.
 
