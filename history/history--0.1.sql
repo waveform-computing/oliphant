@@ -73,7 +73,6 @@ CREATE FUNCTION _history_periodlen(resolution varchar(12))
 AS $$
     VALUES (CASE resolution
         WHEN 'quarter' THEN interval '3 months'
-        WHEN 'millennium' THEN interval '1000 years'
         ELSE ('1 ' || resolution)::interval
     END);
 $$;
@@ -605,7 +604,7 @@ BEGIN
             UNION ALL
             SELECT at + interval %L
             FROM range
-            WHERE at <= %s
+            WHERE at + interval %L <= %s
         )
         SELECT
             %s AS snapshot
@@ -617,6 +616,7 @@ BEGIN
 
         _history_effname(source_oid),
         source_oid::regclass,
+        _history_periodlen(resolution),
         _history_periodlen(resolution),
         _history_effdefault(resolution),
         _history_periodend(resolution, 'r.at'),

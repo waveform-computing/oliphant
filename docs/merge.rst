@@ -401,6 +401,6 @@ API
     they default to the current schema. If the *dest_key* parameter is omitted
     it defaults to the primary key of the target table.
 
-    Columns of the two tables will be matched by name, *not* by position.  All
+    Columns of the two tables will be matched by name, *not* by position. All
     columns specified in *dest_key* must exist in the source table.
 
