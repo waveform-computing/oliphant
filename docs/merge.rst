@@ -245,7 +245,7 @@ The view performs the following operations:
 Now we can load data into our final ``contracts`` table, with all data cleaning
 performed in SQL as follows:
 
-.. code-block:: psql
+.. code-block:: sql
 
     COPY contracts_raw FROM 'contracts.csv' WITH (FORMAT csv);
     SELECT auto_merge('contracts_clean', 'contracts');
@@ -279,7 +279,7 @@ customers had a similar setup (a table to hold the raw source data, a view to
 clean the raw data, and a final table to contain the cleaned data), in this
 case our loading script might look something like this:
 
-.. code-block:: psql
+.. code-block:: sql
 
     COPY contracts_raw FROM 'contracts.csv' WITH (FORMAT csv);
     COPY customers_raw FROM 'customers.csv' WITH (FORMAT csv);

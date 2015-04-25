@@ -22,51 +22,57 @@ The most basic routines in the extension are :func:`assert_is_null` and
 :func:`assert_is_not_null` which test whether the given value is or is not NULL
 respectively, raising SQLSTATEs UTA06 and UTA07 respectively. These functions
 have two overloaded variants, one using the polymorphic ``anyelement`` type and
-the other ``text`` which should cover the vast majority of use cases::
+the other ``text`` which should cover the vast majority of use cases:
 
-    dave=# SELECT assert_is_null(null::date);
+.. code-block:: psql
+
+    db=# SELECT assert_is_null(null::date);
      assert_is_null
     ----------------
 
     (1 row)
 
-    dave=# SELECT assert_is_null('');
+    db=# SELECT assert_is_null('');
     ERROR:   is not NULL
-    dave=# SELECT assert_is_null(1);
+    db=# SELECT assert_is_null(1);
     ERROR:  1 is not NULL
 
 Similarly, :func:`assert_equals` and :func:`assert_not_equals` test whether the
 two provided values are equal or not. If the assertion fails, SQLSTATE UTA08 is
 raised by :func:`assert_equals` and UTA09 by :func:`assert_not_equals`. Again,
-two overloaded variants exist to cover all necessary types::
+two overloaded variants exist to cover all necessary types:
 
-    dave=# SELECT assert_equals(1, 1);
+.. code-block:: psql
+
+    db=# SELECT assert_equals(1, 1);
      assert_equals
     ---------------
 
     (1 row)
 
-    dave=# SELECT assert_equals('foo', 'bar');
+    db=# SELECT assert_equals('foo', 'bar');
     ERROR:  foo does not equal bar
 
 A set of functions for asserting the existing of various structures are also
 provided: :func:`assert_table_exists` (which works for any relation-like
 structure such as tables and views), :func:`assert_column_exists` (for testing
 individual columns within a relation), :func:`assert_function_exists`, and
-:func:`assert_trigger_exists`::
+:func:`assert_trigger_exists`:
 
-    dave=# CREATE TABLE foo (i integer NOT NULL);
+.. code-block:: psql
+
+    db=# CREATE TABLE foo (i integer NOT NULL);
     CREATE TABLE
-    dave=# SELECT assert_table_exists('foo');
+    db=# SELECT assert_table_exists('foo');
      assert_table_exists
     ---------------------
 
     (1 row)
 
-    dave=# SELECT assert_table_exists('bar');
+    db=# SELECT assert_table_exists('bar');
     ERROR:  Table public.bar does not exist
     CONTEXT:  SQL function "assert_table_exists" statement 1
-    dave=# SELECT assert_column_exists('foo', 'i');
+    db=# SELECT assert_column_exists('foo', 'i');
      assert_column_exists
     ----------------------
 
@@ -103,15 +109,17 @@ types, nullability, etc.
 Finally, the :func:`assert_raises` function can be used to test whether
 arbitrary SQL raises an expected SQLSTATE. This is especially useful when
 building test suites for extensions (naturally, this function is used
-extensively within the test suite for the :mod:`assert` extension!)::
+extensively within the test suite for the :mod:`assert` extension!):
 
-    dave=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 2)');
+.. code-block:: psql
+
+    db=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 2)');
      assert_raises
     ---------------
 
     (1 row)
 
-    dave=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 1)');
+    db=# SELECT assert_raises('UTA08', 'SELECT assert_equals(1, 1)');
     ERROR:  SELECT assert_equals(1, 1) did not signal SQLSTATE UTA08
 
 API

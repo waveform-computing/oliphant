@@ -16,7 +16,9 @@ Ubuntu installation
 
 The following assumes you already have a PostgreSQL server installed on your
 Ubuntu machine. To install the pre-requisites, clone the Oliphant repository
-and install the extensions within your PostgreSQL server::
+and install the extensions within your PostgreSQL server:
+
+.. code-block:: console
 
     $ sudo apt-get install git make postgresql-server-dev-all
     $ git clone https://github.com/waveform80/oliphant.git
@@ -48,7 +50,9 @@ Development installation
 If you wish to develop oliphant itself, it is easiest to use the ``develop``
 target of the makefile. This does something similar to ``install``, but creates
 symlinks within your PostgreSQL extension directory which makes it a bit easier
-to hack on the code. The following assumes Ubuntu::
+to hack on the code. The following assumes Ubuntu:
+
+.. code-block:: console
 
     $ sudo apt-get install git make postgresql-server-dev-all
     $ git clone https://github.com/waveform80/oliphant.git
@@ -64,7 +68,9 @@ Database installation
 
 Once the Oliphant extensions have been added to your PostgreSQL installation
 you can install them in the database(s) of your choice. To do this manually
-simply use the `CREATE EXTENSION`_ with the extensions, e.g.::
+simply use the `CREATE EXTENSION`_ with the extensions, e.g.:
+
+.. code-block:: psql
 
     db=# CREATE EXTENSION auth;
     CREATE EXTENSION
@@ -74,7 +80,9 @@ simply use the `CREATE EXTENSION`_ with the extensions, e.g.::
 Alternatively, you can use the ``installdb`` target of the makefile. This will
 install all extensions available in Oliphant into the target database. This
 defaults to the same database as your username but you can edit the makefile
-to change this::
+to change this:
+
+.. code-block:: console
 
     $ make installdb
     for m in assert auth history merge; do \

@@ -17,7 +17,7 @@ functions of an individual extension.
 The functions of the :mod:`assert` extension are primarily intended for the
 construction of test suites. Each performs a relatively simple, obvious
 function, raising an error in the case of failure. For example, to ensure that
-a particular table exists, use :func:`~assert.assert_table_exists`::
+a particular table exists, use :func:`~assert.assert_table_exists`:
 
 .. code-block:: sql
 
@@ -27,7 +27,7 @@ a particular table exists, use :func:`~assert.assert_table_exists`::
 
 Or to ensure that some value equals another value, use
 :func:`~assert.assert_equals` (this has overridden variants for all common
-types)::
+types):
 
 .. code-block:: sql
 
@@ -45,7 +45,7 @@ Likewise, various similar functions are provided:
 * :func:`~assert.assert_trigger_exists`
 
 One of the more interesting functions is :func:`~assert.assert_raises` which
-can be used to check that something produces a specific SQLSTATE::
+can be used to check that something produces a specific SQLSTATE:
 
 .. code-block:: sql
 
@@ -59,7 +59,7 @@ can be used to check that something produces a specific SQLSTATE::
 
 The functions of the :mod:`auth` extension are intended for bulk manipulation
 of role based authorizations. For example, use :func:`~auth.copy_role_auths` to
-copy all roles from user1 to user2::
+copy all roles from user1 to user2:
 
 .. code-block:: sql
 
@@ -75,14 +75,14 @@ That can be easily accomplished with the :ref:`REASSIGN OWNED` statement
 instead.
 
 If you wish to move all authorizations from one user to another this can be
-accomplished with the similar procedure::
+accomplished with the similar procedure:
 
 .. code-block:: sql
 
     SELECT move_role_auths('user1', 'user2');
 
 A couple of other procedures can be used to manipulate table authorizations.
-To store and restore the authorizations associated with a table::
+To store and restore the authorizations associated with a table:
 
 .. code-block:: sql
 
@@ -92,7 +92,7 @@ To store and restore the authorizations associated with a table::
 This may seem pointless in and of itself until you understand that the
 authorizations are stored in the ``stored_table_auths`` table which allows you
 to manipulate them between storage and restoration. For example, to copy
-all authorizations from one table to another::
+all authorizations from one table to another:
 
 .. code-block:: sql
 
@@ -101,7 +101,7 @@ all authorizations from one table to another::
     WHERE table_name = 'foo';
     SELECT restore_table_auths('bar');
 
-Alternatively, to copy only the SELECT privileges::
+Alternatively, to copy only the SELECT privileges:
 
 .. code-block:: sql
 
@@ -115,7 +115,7 @@ Alternatively, to copy only the SELECT privileges::
 
 Of course, even without manipulation it can be useful when one wishes to drop
 and recreate the table for any reason (e.g. to change the structure in a way
-not supported by :ref:`ALTER TABLE`)::
+not supported by :ref:`ALTER TABLE`):
 
 .. code-block:: sql
 
