@@ -211,11 +211,11 @@ definitions used above, the following statements are equivalent:
 
 .. warning::
 
-    It is strongly recommended that you read the full usage chapter on the
-    temporal data functions to understand their precise effect and how to query
-    and maintain the resulting structures. This section is intended as a brief
-    introduction and/or refresher and does not discuss the complexities of
-    temporal data at all.
+    It is strongly recommended that you read the :mod:`full usage chapter
+    <history>` on the temporal data functions to understand their precise
+    effect and how to query and maintain the resulting structures. This section
+    is intended as a brief introduction and/or refresher and does not discuss
+    the complexities of temporal data at all.
 
 In this section, the following example tables will be used:
 

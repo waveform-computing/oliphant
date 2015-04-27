@@ -315,14 +315,16 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT
-            attname
+            s.attname
         FROM
-            pg_catalog.pg_attribute
+            pg_catalog.pg_attribute s
+            JOIN pg_catalog.pg_attribute t
+                ON s.attname = t.attname
         WHERE
-            attrelid = source_oid
-            AND attnum > 0
-            AND NOT attisdropped
-        ORDER BY attnum
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
+            AND s.attnum > 0
+            AND NOT s.attisdropped
     LOOP
         insert_stmt := insert_stmt || format(', %I', r.attname);
         values_stmt := values_stmt || format(', new.%I', r.attname);
@@ -410,17 +412,20 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT
-            att.attname,
-            ARRAY [att.attnum] <@ con.conkey AS iskey
+            s.attname,
+            ARRAY [s.attnum] <@ c.conkey AS iskey
         FROM
-            pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_constraint con
-                ON con.conrelid = att.attrelid
+            pg_catalog.pg_attribute s
+            JOIN pg_catalog.pg_constraint c
+                ON c.conrelid = s.attrelid
+            JOIN pg_catalog.pg_attribute t
+                ON s.attname = t.attname
         WHERE
-            att.attrelid = source_oid
-            AND att.attnum > 0
-            AND NOT att.attisdropped
-            AND con.contype = 'p'
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
+            AND s.attnum > 0
+            AND NOT s.attisdropped
+            AND c.contype = 'p'
     LOOP
         IF r.iskey THEN
             where_stmt := where_stmt || format(' AND %I = old.%I', r.attname, r.attname);
@@ -461,17 +466,20 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT
-            att.attname
+            s.attname
         FROM
-            pg_catalog.pg_attribute att
-            JOIN pg_catalog.pg_constraint con
-                ON con.conrelid = att.attrelid
+            pg_catalog.pg_attribute s
+            JOIN pg_catalog.pg_constraint c
+                ON c.conrelid = s.attrelid
+            JOIN pg_catalog.pg_attribute t
+                ON s.attname = t.attname
         WHERE
-            att.attrelid = source_oid
-            AND att.attnum > 0
-            AND NOT att.attisdropped
-            AND con.contype = 'p'
-            AND ARRAY [att.attnum] <@ con.conkey
+            s.attrelid = source_oid
+            AND t.attrelid = dest_oid
+            AND s.attnum > 0
+            AND NOT s.attisdropped
+            AND c.contype = 'p'
+            AND ARRAY [s.attnum] <@ c.conkey
     LOOP
         where_stmt := where_stmt || format(' AND %I = old.%I', r.attname, r.attname);
     END LOOP;

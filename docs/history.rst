@@ -565,7 +565,7 @@ regular table. The first thing to determine is whether the modification you
 wish to make is capable of being made in a way that does not damage the
 history.
 
-For example, if you are adding a column, the history table will also need that
+For example, if you are adding a column, the history table may also need that
 column added in which case you will either need to make the column nullable
 or come up with some suitable default (similar to adding a column to any
 non-empty table). The procedure is as follows:
@@ -583,7 +583,7 @@ active transactions, as demonstrated below:
 
     db=# begin;
     BEGIN
-    dave=# select drop_history_triggers('employees');
+    db=# select drop_history_triggers('employees');
      drop_history_triggers
     -----------------------
 
@@ -601,6 +601,13 @@ active transactions, as demonstrated below:
 
     db=# commit;
     COMMIT
+
+Note that the history table need not have all the attributes of the base table.
+This is specifically to support the use-case where certain attributes of the
+base table should not be tracked (in this case one can create the history table
+with :func:`create_history_table`, drop certain attributes from the newly
+created table with :ref:`ALTER TABLE` and then create the triggers). However,
+all primary key columns from the base table must exist in the history table.
 
 Removing a column is a similar process, provided it's not a key column.
 Remember that history triggers *require* a primary key on the base table and
