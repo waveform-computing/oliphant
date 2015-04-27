@@ -66,6 +66,8 @@
 -- of input parameters.
 -------------------------------------------------------------------------------
 
+-- Generates an interval representing one element in the specified resolution
+
 CREATE FUNCTION _history_periodlen(resolution varchar(12))
     RETURNS interval
     LANGUAGE SQL
@@ -76,6 +78,9 @@ AS $$
         ELSE ('1 ' || resolution)::interval
     END);
 $$;
+
+-- Generates an interval which can be added to a temporal datetime value
+-- (a date or timestamp depending on resolution)
 
 CREATE FUNCTION _history_periodstep(resolution varchar(12))
     RETURNS interval
@@ -108,6 +113,9 @@ AS $$
     END);
 $$;
 
+-- Returns the name of the effective column for the specified resolution or
+-- table (the first column in the latter case)
+
 CREATE FUNCTION _history_effname(resolution varchar(12))
     RETURNS name
     LANGUAGE SQL
@@ -130,6 +138,9 @@ AS $$
         AND attnum = 1;
 $$;
 
+-- Returns the name of the expiry column for the specified resolution or table
+-- (the second column in the latter case)
+
 CREATE FUNCTION _history_expname(resolution varchar(12))
     RETURNS name
     LANGUAGE SQL
@@ -151,6 +162,9 @@ AS $$
         attrelid = source_oid
         AND attnum = 2;
 $$;
+
+-- Returns the SQL for the default value for the effective column given a
+-- resolution or a table
 
 CREATE FUNCTION _history_effdefault(resolution varchar(12))
     RETURNS text
@@ -181,6 +195,9 @@ AS $$
         AND a.attnum = 1;
 $$;
 
+-- Returns the SQL for the default value for the expiry column given a
+-- resolution or a table
+
 CREATE FUNCTION _history_expdefault(resolution varchar(12))
     RETURNS text
     LANGUAGE SQL
@@ -210,6 +227,9 @@ AS $$
         AND a.attnum = 2;
 $$;
 
+-- Given a resolution, and an SQL expression, returns an expression which will
+-- return the start of a temporal period
+
 CREATE FUNCTION _history_periodstart(resolution varchar(12), expression text)
     RETURNS text
     LANGUAGE SQL
@@ -219,6 +239,9 @@ AS $$
         format('date_trunc(%L, %s)', resolution, expression)
     );
 $$;
+
+-- Given a resolution, and an SQL expression, returns an expression which will
+-- return the end of a temporal period
 
 CREATE FUNCTION _history_periodend(resolution varchar(12), expression text)
     RETURNS text
@@ -233,6 +256,9 @@ AS $$
         )
     );
 $$;
+
+-- Return the start of the next temporal period (from now) for a specified
+-- resolution and offset (which can be NULL)
 
 CREATE FUNCTION _history_effnext(resolution varchar(12), shift interval)
     RETURNS text
@@ -249,6 +275,9 @@ AS $$
     );
 $$;
 
+-- Return the end of the prior temporal period (from now) for the given
+-- resolution and offset (which can be NULL)
+
 CREATE FUNCTION _history_expprior(resolution varchar(12), shift interval)
     RETURNS text
     LANGUAGE SQL
@@ -264,6 +293,10 @@ AS $$
             END)
     );
 $$;
+
+-- Generate the SQL necessary to insert a new row into the history table
+-- (dest_oid) from the base table (source_oid) for a given resolution and
+-- offset
 
 CREATE FUNCTION _history_insert(
     source_oid oid,
@@ -308,6 +341,9 @@ BEGIN
     );
 END;
 $$;
+
+-- Generate the SQL necessary to expire the current row in the history table
+-- for a given key in the base table
 
 CREATE FUNCTION _history_expire(
     source_oid oid,
@@ -354,6 +390,9 @@ BEGIN
     );
 END;
 $$;
+
+-- Generate the SQL necessary to update the current row in the history table
+-- from the latest (non-key) attributes in the base table, for a given key
 
 CREATE FUNCTION _history_update(
     source_oid oid,
@@ -404,6 +443,9 @@ BEGIN
 END;
 $$;
 
+-- Generate the SQL necessary to delete the current row in the history table
+-- for a given key in the base table
+
 CREATE FUNCTION _history_delete(
     source_oid oid,
     dest_oid oid,
@@ -447,6 +489,10 @@ BEGIN
     );
 END;
 $$;
+
+-- Generate an SQL query to determine the end of the period for the current
+-- row in the history of a given key. This is used in the triggers to determine
+-- if a row should be overwritten or expired
 
 CREATE FUNCTION _history_check(
     source_oid oid,
@@ -493,6 +539,9 @@ BEGIN
     );
 END;
 $$;
+
+-- Generate the SQL query for the body of a changes view for the specified
+-- history table (source_oid)
 
 CREATE FUNCTION _history_changes(source_oid oid)
     RETURNS text
@@ -573,6 +622,9 @@ BEGIN
 END;
 $$;
 
+-- Generate the SQL query for the body of a snapshots view for the specified
+-- history table (source_oid) and resolution
+
 CREATE FUNCTION _history_snapshots(source_oid oid, resolution varchar(12))
     RETURNS text
     LANGUAGE plpgsql
@@ -627,6 +679,11 @@ BEGIN
 END;
 $$;
 
+-- Generate a comma separate list of fields from the specified table
+-- (source_oid).  If key_fields is true, only attributes from the primary key
+-- will be returned.  Otherwise, only attributes *not* present in the primary
+-- key will be returned.
+
 CREATE FUNCTION _history_update_fields(source_oid oid, key_fields boolean)
     RETURNS text
     LANGUAGE plpgsql
@@ -660,6 +717,12 @@ BEGIN
     RETURN substring(result from 2);
 END;
 $$;
+
+-- Generate a search expression to determine whether the fields from the
+-- specified table (source_oid) have changd value. If key_fields is true, the
+-- expression will only cover fields in the primary key (used by the key_chg
+-- trigger). Otherwise, the expression will only cover fields *not* in the
+-- primary key (used by the update trigger).
 
 CREATE FUNCTION _history_update_when(source_oid oid, key_fields boolean)
     RETURNS text
