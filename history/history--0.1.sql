@@ -548,6 +548,61 @@ BEGIN
 END;
 $$;
 
+-- Generate the SQL necessary to expire all relevant rows in the history table
+-- as required by the TRUNCATE statement trigger
+
+CREATE FUNCTION _history_expire_all(
+    dest_oid oid,
+    resolution varchar(12),
+    shift interval
+)
+    RETURNS text
+    LANGUAGE plpgsql
+    STABLE
+AS $$
+BEGIN
+    RETURN format(
+        $sql$
+        UPDATE %s SET %I = %s
+        WHERE %I = %s
+        AND %s > %s
+        $sql$,
+
+        dest_oid::regclass,
+        _history_expname(dest_oid), _history_expprior(resolution, shift),
+        _history_expname(dest_oid), _history_expdefault(resolution),
+        _history_effnext(resolution, shift), _history_periodend(resolution, _history_effname(dest_oid))
+    );
+END;
+$$;
+
+-- Generate the SQL necessary to delete all relevant rows in the history table
+-- as required by the TRUNCATE statement trigger
+
+CREATE FUNCTION _history_delete_all(
+    dest_oid oid,
+    resolution varchar(12),
+    shift interval
+)
+    RETURNS text
+    LANGUAGE plpgsql
+    STABLE
+AS $$
+BEGIN
+    RETURN format(
+        $sql$
+        DELETE FROM %s
+        WHERE %I = %s
+        AND %s <= %s
+        $sql$,
+
+        dest_oid::regclass,
+        _history_expname(dest_oid), _history_expdefault(resolution),
+        _history_effnext(resolution, shift), _history_periodend(resolution, _history_effname(dest_oid))
+    );
+END;
+$$;
+
 -- Generate the SQL query for the body of a changes view for the specified
 -- history table (source_oid)
 
@@ -1725,6 +1780,42 @@ BEGIN
         source_oid::regclass,
         source_schema, source_table || '_delete'
     );
+
+    -- Create the TRUNCATE trigger
+    EXECUTE format(
+        $sql$
+        CREATE FUNCTION %I.%I()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            VOLATILE
+            SECURITY DEFINER
+            SET search_path = %I, pg_temp
+        AS $func$
+        BEGIN
+            %s;
+            %s;
+            RETURN NULL;
+        END;
+        $func$
+        $sql$,
+
+        source_schema, source_table || '_truncate',
+        dest_schema,
+        _history_expire_all(dest_oid, resolution, shift),
+        _history_delete_all(dest_oid, resolution, shift)
+    );
+    EXECUTE format(
+        $sql$
+        CREATE TRIGGER %I
+            AFTER TRUNCATE ON %s
+            FOR EACH STATEMENT
+            EXECUTE PROCEDURE %I.%I()
+        $sql$,
+
+        source_table || '_truncate',
+        source_oid::regclass,
+        source_schema, source_table || '_truncate'
+    );
 END;
 $$;
 
@@ -1808,7 +1899,7 @@ BEGIN
         SELECT
             suffix
         FROM (
-            VALUES ('keychg'), ('insert'), ('update'), ('delete')
+            VALUES ('keychg'), ('insert'), ('update'), ('delete'), ('truncate')
         ) AS t(suffix)
     LOOP
         EXECUTE format(

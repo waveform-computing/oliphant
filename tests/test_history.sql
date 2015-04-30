@@ -36,6 +36,7 @@ SELECT create_history_triggers('foo', 'day');
 SELECT assert_trigger_exists('foo', 'foo_insert');
 SELECT assert_trigger_exists('foo', 'foo_update');
 SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_truncate');
 SELECT assert_trigger_exists('foo', 'foo_keychg');
 
 -- Create a changes view on the history table and ensure it has the expected
@@ -166,6 +167,21 @@ VALUES (assert_equals(4::bigint, (
 
 SELECT assert_raises('UTH01', 'UPDATE foo SET id = 4 WHERE id = 2');
 
+-- Ensure the truncate trigger is operational
+
+TRUNCATE foo;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date - interval '1 day', current_date - interval '1 day', 2, 2)
+    ) AS t)));
+
 DROP VIEW foo_changes;
 DROP TABLE foo_history;
 SELECT drop_history_triggers('foo');
@@ -196,6 +212,7 @@ SELECT create_history_triggers('foo', 'microsecond');
 SELECT assert_trigger_exists('foo', 'foo_insert');
 SELECT assert_trigger_exists('foo', 'foo_update');
 SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_truncate');
 SELECT assert_trigger_exists('foo', 'foo_keychg');
 
 SELECT create_history_changes('foo_history');
@@ -274,6 +291,19 @@ VALUES (assert_equals(4::bigint, (
             (current_timestamp,                       'UPDATE', 2,    2,    1,    2)
     ) AS t)));
 
+TRUNCATE foo;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_timestamp - interval '1 second', current_timestamp - interval '1 microsecond', 1, 1),
+            (current_timestamp - interval '1 second', current_timestamp - interval '1 microsecond', 2, 1)
+    ) AS t)));
+
 DROP VIEW foo_changes;
 SELECT drop_history_triggers('foo');
 DROP TABLE foo_history;
@@ -301,6 +331,7 @@ SELECT create_history_triggers('foo', 'week', interval '-7 days');
 SELECT assert_trigger_exists('foo', 'foo_insert');
 SELECT assert_trigger_exists('foo', 'foo_update');
 SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_truncate');
 SELECT assert_trigger_exists('foo', 'foo_keychg');
 
 INSERT INTO foo VALUES (1, 1);
@@ -349,6 +380,7 @@ VALUES (assert_equals(4::bigint, (
 SELECT create_history_triggers('foo', 'day');
 SELECT assert_trigger_exists('foo', 'foo_insert');
 SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_truncate');
 SELECT assert_trigger_exists('foo', 'foo_keychg');
 
 INSERT INTO foo (foo_id, bar_id) VALUES (1, 1);

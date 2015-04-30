@@ -170,6 +170,9 @@ This creates four triggers (and their corresponding functions):
 * ``employees_delete`` which is triggered upon DELETE operations against the
   ``employees`` table. This simply expires the current history row as detailed
   above.
+* ``employees_truncate`` which is triggered upon TRUNCATE operations against
+  the ``employees`` table. This expires all current history rows as detailed
+  above.
 * ``employees_keychg`` which is triggered upon UPDATE of key columns in the
   ``employees`` table. This simply raises an exception; i.e. updates of the
   primary key columns are not permitted in tables which have their history
