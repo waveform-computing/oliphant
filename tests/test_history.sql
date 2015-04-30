@@ -404,3 +404,132 @@ SELECT drop_history_triggers('foo');
 DROP TABLE foo_history;
 DROP TABLE foo;
 
+-- Test that operation works with tables that have mismatched attributes
+
+CREATE TABLE foo (
+    id integer NOT NULL PRIMARY KEY,
+    value integer NOT NULL,
+    ignored text NOT NULL
+);
+
+INSERT INTO foo (id, value, ignored) VALUES (1, 1, 'foo');
+
+SELECT create_history_table('foo', 'day');
+SELECT assert_table_exists('foo_history');
+
+-- Remove the "ignored" column and ensure everything still operates as expected
+ALTER TABLE foo_history DROP COLUMN ignored;
+VALUES (assert_equals(4::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT attnum, attname
+        FROM pg_catalog.pg_attribute
+        WHERE attrelid = 'foo_history'::regclass
+        AND attnum > 0
+
+        INTERSECT
+
+        VALUES
+            (1, 'effective'),
+            (2, 'expiry'),
+            (3, 'id'),
+            (4, 'value')
+    ) AS t)));
+
+SELECT create_history_triggers('foo', 'day');
+SELECT assert_trigger_exists('foo', 'foo_insert');
+SELECT assert_trigger_exists('foo', 'foo_update');
+SELECT assert_trigger_exists('foo', 'foo_delete');
+SELECT assert_trigger_exists('foo', 'foo_truncate');
+SELECT assert_trigger_exists('foo', 'foo_keychg');
+
+INSERT INTO foo VALUES (2, 2, 'bar');
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date, date '9999-12-31', 1, 1),
+            (current_date, date '9999-12-31', 2, 2)
+    ) AS t)));
+
+DELETE FROM foo WHERE id = 1;
+VALUES (assert_equals(1::bigint, (SELECT count(*) FROM foo_history)));
+
+INSERT INTO foo (id, value, ignored) VALUES (1, 1, 'baz');
+UPDATE foo_history SET effective = current_date - interval '1 day' WHERE id = 1;
+DELETE FROM foo WHERE id = 1;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date,                    date '9999-12-31',               2, 2)
+    ) AS t)));
+
+UPDATE foo SET value = 1 WHERE id = 2;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date,                    date '9999-12-31',               2, 1)
+    ) AS t)));
+
+UPDATE foo SET value = 2 WHERE id = 2;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date,                    date '9999-12-31',               2, 2)
+    ) AS t)));
+
+UPDATE foo_history SET effective = current_date - interval '1 day' WHERE id = 2;
+UPDATE foo SET value = 1 WHERE id = 2;
+VALUES (assert_equals(3::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date - interval '1 day', current_date - interval '1 day', 2, 2),
+            (current_date,                    date '9999-12-31',               2, 1)
+    ) AS t)));
+
+SELECT assert_raises('UTH01', 'UPDATE foo SET id = 4 WHERE id = 2');
+
+TRUNCATE foo;
+VALUES (assert_equals(2::bigint, (
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo_history
+
+        INTERSECT
+
+        VALUES
+            (current_date - interval '1 day', current_date - interval '1 day', 1, 1),
+            (current_date - interval '1 day', current_date - interval '1 day', 2, 2)
+    ) AS t)));
+
+DROP TABLE foo_history;
+SELECT drop_history_triggers('foo');
+DROP TABLE foo;
