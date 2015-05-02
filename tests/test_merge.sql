@@ -105,4 +105,27 @@ DROP TABLE bar;
 DROP TABLE baz;
 DROP TABLE emp;
 
+CREATE TABLE foo (
+    id1 integer not null,
+    id2 integer not null,
+    primary key (id1, id2)
+);
+
+INSERT INTO foo VALUES (1, 1), (2, 2), (3, 3);
+CREATE TABLE bar AS (SELECT * FROM foo) WITH NO DATA;
+ALTER TABLE bar ADD CONSTRAINT bar_pk PRIMARY KEY (id1, id2);
+INSERT INTO bar VALUES (1, 1);
+
+SELECT auto_merge('foo', 'bar');
+VALUES (assert_equals((
+    SELECT count(*)
+    FROM (
+        SELECT * FROM foo
+        INTERSECT
+        SELECT * FROM bar
+    ) AS t), 3::bigint));
+
+DROP TABLE foo;
+DROP TABLE bar;
+
 -- vim: set et sw=4 sts=4:

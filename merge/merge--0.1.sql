@@ -163,6 +163,45 @@ BEGIN
 END;
 $$;
 
+-- Build an INSERT..SELECT from source_oid to dest_oid, which excludes already
+-- existing keys; this is used for auto_merge where the target table consists
+-- entirely of columns from the primary key
+
+CREATE FUNCTION _build_insert_keys(source_oid oid, dest_oid oid)
+    RETURNS text
+    LANGUAGE plpgsql
+    STABLE
+AS $$
+DECLARE
+    cols text DEFAULT '';
+BEGIN
+    SELECT string_agg(quote_ident(t.attname), ',')
+    INTO STRICT cols
+    FROM
+        pg_catalog.pg_attribute s
+        JOIN pg_catalog.pg_attribute t
+            ON s.attname = t.attname
+    WHERE
+        s.attrelid = source_oid
+        AND t.attrelid = dest_oid
+        AND t.attnum > 0
+        AND NOT t.attisdropped;
+
+    RETURN format(
+        $sql$
+        INSERT INTO %s (%s)
+        SELECT %s FROM %s
+        EXCEPT
+        SELECT %s FROM %s
+        $sql$,
+
+        dest_oid::regclass, cols,
+        cols, source_oid::regclass,
+        cols, dest_oid::regclass
+    );
+END;
+$$;
+
 -- Build a statement for merging records from source_oid to dest_oid, keyed
 -- by dest_key. This uses various functions above depending on whether the
 -- target contains non-key attributes or not
@@ -174,11 +213,27 @@ CREATE FUNCTION _build_merge(source_oid oid, dest_oid oid, dest_key name)
 AS $$
 DECLARE
     key_cols text DEFAULT '';
-    r record;
+    all_keys boolean;
 BEGIN
-    FOR r IN
-        SELECT
-            t.attname
+    -- Determine whether the source table is "all key, no attributes"
+    SELECT array_length(con.conkey, 1) = count(att.attnum)
+    INTO all_keys
+    FROM
+        pg_catalog.pg_attribute att
+        JOIN pg_catalog.pg_constraint con
+            ON att.attrelid = con.conrelid
+    WHERE
+        att.attrelid = dest_oid
+        AND att.attnum > 0
+        AND NOT att.attisdropped
+        AND con.contype = 'p'
+    GROUP BY con.conkey;
+
+    IF all_keys THEN
+        RETURN _build_insert_keys(source_oid, dest_oid);
+    ELSE
+        SELECT string_agg(quote_ident(t.attname), ',')
+        INTO key_cols
         FROM
             pg_catalog.pg_attribute t
             JOIN pg_catalog.pg_constraint c
@@ -190,27 +245,24 @@ BEGIN
             AND c.contype IN ('p', 'u')
             -- XXX what about connamespace?
             AND c.conname = dest_key
-            AND ARRAY [t.attnum] <@ c.conkey
-    LOOP
-        key_cols := key_cols || format(',%I', r.attname);
-    END LOOP;
-    key_cols := substring(key_cols from 2);
+            AND ARRAY [t.attnum] <@ c.conkey;
 
-    RETURN format(
-        $sql$
-        WITH upsert AS (
-            %s
-        )
-        %s WHERE ROW (%s) NOT IN (
-            SELECT %s
-            FROM upsert
-        )
-        $sql$,
+        RETURN format(
+            $sql$
+            WITH upsert AS (
+                %s
+            )
+            %s WHERE ROW (%s) NOT IN (
+                SELECT %s
+                FROM upsert
+            )
+            $sql$,
 
-        _build_update(source_oid, dest_oid, dest_key),
-        _build_insert(source_oid, dest_oid),
-        key_cols, key_cols
-    );
+            _build_update(source_oid, dest_oid, dest_key),
+            _build_insert(source_oid, dest_oid),
+            key_cols, key_cols
+        );
+    END IF;
 END;
 $$;
 
