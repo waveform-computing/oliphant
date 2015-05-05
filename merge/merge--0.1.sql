@@ -133,7 +133,7 @@ DECLARE
     key_cols text DEFAULT '';
 BEGIN
     SELECT string_agg(quote_ident(t.attname), ',')
-    INTO key_cols
+    INTO STRICT key_cols
     FROM
         pg_catalog.pg_attribute t
         JOIN pg_catalog.pg_constraint c
@@ -217,7 +217,7 @@ DECLARE
 BEGIN
     -- Determine whether the source table is "all key, no attributes"
     SELECT array_length(con.conkey, 1) = count(att.attnum)
-    INTO all_keys
+    INTO STRICT all_keys
     FROM
         pg_catalog.pg_attribute att
         JOIN pg_catalog.pg_constraint con
@@ -233,7 +233,7 @@ BEGIN
         RETURN _build_insert_keys(source_oid, dest_oid);
     ELSE
         SELECT string_agg(quote_ident(t.attname), ',')
-        INTO key_cols
+        INTO STRICT key_cols
         FROM
             pg_catalog.pg_attribute t
             JOIN pg_catalog.pg_constraint c
