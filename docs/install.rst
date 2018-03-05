@@ -21,7 +21,7 @@ and install the extensions within your PostgreSQL server:
 .. code-block:: console
 
     $ sudo apt-get install git make postgresql-server-dev-all
-    $ git clone https://github.com/waveform80/oliphant.git
+    $ git clone https://github.com/waveform-computing/oliphant.git
     $ cd oliphant
     $ sudo make install
 
@@ -55,7 +55,7 @@ to hack on the code. The following assumes Ubuntu:
 .. code-block:: console
 
     $ sudo apt-get install git make postgresql-server-dev-all
-    $ git clone https://github.com/waveform80/oliphant.git
+    $ git clone https://github.com/waveform-computing/oliphant.git
     $ cd oliphant
     $ sudo make develop
 

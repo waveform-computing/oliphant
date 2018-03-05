@@ -32,7 +32,7 @@ Links
   be read on ReadTheDocs
 
 .. _MIT license: http://opensource.org/licenses/MIT
-.. _source code: https://github.com/waveform80/oliphant
-.. _bug tracker: https://github.com/waveform80/oliphant/issues
+.. _source code: https://github.com/waveform-computing/oliphant
+.. _bug tracker: https://github.com/waveform-computing/oliphant/issues
 .. _documentation: http://oliphant.readthedocs.org/
 
